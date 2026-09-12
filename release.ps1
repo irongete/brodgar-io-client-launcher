@@ -14,6 +14,7 @@
   on (or jdk.home in build.properties), and their zip -- tags HEAD as v<version>, pushes the branch and the
   tag, and creates the GitHub release with the zip as its asset.
 
+  A release is cut from master; the script refuses any other branch unless -Branch names it.
   A version with a suffix is published as a GitHub pre-release and a plain x.y.z as a plain release; -Channel
   says otherwise when it must. The runtime the player gets is the JDK this runs on, so run it on the JDK
   the client is verified on.
@@ -27,6 +28,8 @@
   The release notes, inline.
 .PARAMETER Channel
   release or beta; by default the version decides (a suffix is a beta).
+.PARAMETER Branch
+  The branch a release is cut from: master, unless you say otherwise. The script refuses any other.
 .PARAMETER Draft
   Create the release as a draft, to be published by hand on GitHub.
 .PARAMETER NoPublish
@@ -37,6 +40,7 @@ param(
     [string]$Notes,
     [string]$Message,
     [ValidateSet('release', 'beta')][string]$Channel,
+    [string]$Branch = 'master',
     [switch]$Draft,
     [switch]$NoPublish
 )
@@ -61,7 +65,8 @@ if ($Notes -and $Message) { throw 'give -Notes or -Message, not both' }
 if ($Notes -and -not (Test-Path $Notes)) { throw "notes file not found: $Notes" }
 if (git status --porcelain) { throw 'the working tree is not clean: commit or stash first' }
 if (git tag -l $tag) { throw "the tag $tag already exists" }
-$branch = (git rev-parse --abbrev-ref HEAD).Trim()
+$current = (git rev-parse --abbrev-ref HEAD).Trim()   # not $branch: PowerShell names are case-insensitive, and $Branch is the parameter
+if ($current -ne $Branch) { throw "you are on '$current', and a release is cut from '$Branch': check it out (or pass -Branch $current to mean it)" }
 if (-not $NoPublish) {
     gh auth status *> $null
     if ($LASTEXITCODE -ne 0) { throw 'gh is not logged in: run `gh auth login` first' }
@@ -89,7 +94,7 @@ if ($Notes) {
 # --- build: from scratch, then the folder and its zip -------------------------------------------------------
 $jdk = if (Test-Path build.properties) { (Get-Content build.properties | Where-Object { $_ -match '^jdk\.home=' } | Select-Object -First 1) -replace '^jdk\.home=', '' }
 if (-not $jdk) { $jdk = "the JDK ant runs on ($(& java -version 2>&1 | Select-Object -First 1))" }
-Write-Host "Building $title from $branch ($((git rev-parse --short HEAD).Trim())) with $jdk..."
+Write-Host "Building $title from $current ($((git rev-parse --short HEAD).Trim())) with $jdk..."
 if (Test-Path build\classes) { Remove-Item -Recurse -Force build\classes }
 Run ant @("-Dversion=$Version", 'release')
 if (-not (Test-Path $asset)) { throw "the build produced no $asset" }
@@ -103,7 +108,7 @@ if ($NoPublish) {
 }
 
 # --- push and publish ---------------------------------------------------------------------------------------
-Run git @('push', 'origin', $branch)
+Run git @('push', 'origin', $current)
 Run git @('push', 'origin', $tag)
 $create = @('release', 'create', $tag, $asset, '--repo', $repo, '--title', $title, '--notes-file', $notesFile)
 if ($Channel -eq 'beta') { $create += '--prerelease' }
