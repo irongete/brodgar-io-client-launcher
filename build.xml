@@ -17,9 +17,10 @@
   <property name="version" value="0.1.0" />
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
-  <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets and the EC provider a TLS
-       handshake wants on a JDK before 22 (an empty module after). English only: no jdk.localedata. -->
-  <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,jdk.unsupported,jdk.crypto.ec,jdk.charsets" />
+  <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
+       handshake wants on a JDK before 22 (an empty module after), and jdk.management, which the Options
+       dialog reads the machine's memory through. English only: no jdk.localedata. -->
+  <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.management" />
 
   <target name="compile">
     <mkdir dir="build/classes" />

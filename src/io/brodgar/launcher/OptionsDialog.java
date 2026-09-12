@@ -8,6 +8,7 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -20,6 +21,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.UIManager;
@@ -36,15 +38,27 @@ import javax.swing.event.DocumentListener;
 final class OptionsDialog {
     private OptionsDialog() {}
 
-    private static final String[] HEAPS = {"1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB"};
+    /** The bar's ends: 2 GB, and half of what the machine has, never past 16 GB. */
+    static final int MIN_GB = 2, CAP_GB = 16;
 
     /** Open the dialog over <code>owner</code>, modal; back when it is closed. */
     static void show(JFrame owner, Settings settings, Path java) {
         JDialog d = new JDialog(owner, "Options", true);
 
-        JComboBox<String> heap = new JComboBox<>(HEAPS);
-        heap.setEditable(true);
-        heap.setSelectedItem(heapLabel(settings.heap()));
+        long totalGb = totalMemoryGb();
+        int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB, Math.min(CAP_GB, totalGb / 2));
+        JSlider heap = new JSlider(MIN_GB, maxGb, Math.max(MIN_GB, Math.min(maxGb, heapGb(settings.heap()))));
+        heap.setMajorTickSpacing((maxGb - MIN_GB > 8) ? 2 : 1);
+        heap.setMinorTickSpacing(1);
+        heap.setPaintTicks(true);
+        heap.setPaintLabels(true);
+        heap.setSnapToTicks(true);
+        JLabel heapValue = new JLabel(heap.getValue() + " GB");
+        heapValue.setFont(heapValue.getFont().deriveFont(Font.BOLD));
+        heapValue.setPreferredSize(new Dimension(52, heapValue.getPreferredSize().height));
+        JPanel heapRow = new JPanel(new BorderLayout(8, 0));
+        heapRow.add(heap, BorderLayout.CENTER);
+        heapRow.add(heapValue, BorderLayout.EAST);
         JCheckBox pretouch = new JCheckBox("Reserve it all at start", settings.pretouch());
         JComboBox<String> gc = new JComboBox<>(new String[] {"Concurrent (ZGC): frees memory while the game keeps running",
                                                               "Standard (G1): frees memory in short stops"});
@@ -62,17 +76,17 @@ final class OptionsDialog {
         preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(10, preview.getFont().getSize() - 2)));
 
         Runnable refresh = () -> {
-            Settings.Launch l = new Settings.Launch(heapValue(String.valueOf(heap.getEditor().getItem())), pretouch.isSelected(),
+            heapValue.setText(heap.getValue() + " GB");
+            Settings.Launch l = new Settings.Launch(heap.getValue() + "g", pretouch.isSelected(),
                 (gc.getSelectedIndex() == 1) ? "g1" : "zgc", uiScale.isSelected(),
                 switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; },
                 Settings.split(opts.getText()), settings.resourceProxy(), proxyUrl.getText().trim());
             preview.setText(String.join(" ", Launcher.command(java, l)));
             preview.setCaretPosition(0);
         };
-        onChange((JTextField)heap.getEditor().getEditorComponent(), refresh);
         onChange(opts, refresh);
         onChange(proxyUrl, refresh);
-        heap.addActionListener(ev -> refresh.run());
+        heap.addChangeListener(ev -> refresh.run());
         pretouch.addActionListener(ev -> refresh.run());
         gc.addActionListener(ev -> refresh.run());
         uiScale.addActionListener(ev -> refresh.run());
@@ -81,8 +95,9 @@ final class OptionsDialog {
 
         JPanel form = new JPanel(new GridBagLayout());
         Row r = new Row(form);
-        r.add("Game memory", heap,
-              "How much memory the game is given. It is set aside when the game starts, so keep it below what your PC has free.");
+        r.add("Game memory", heapRow,
+              "How much memory the game is given; it is set aside when the game starts. "
+              + ((totalGb > 0) ? "Your PC has " + totalGb + " GB, and the bar stops at half of it." : "The bar stops at " + maxGb + " GB."));
         r.add(null, pretouch,
               "Take all of that memory the moment the game starts, rather than piece by piece as it is first used.");
         r.add("Memory cleanup", gc,
@@ -102,12 +117,7 @@ final class OptionsDialog {
         JButton ok = new JButton("OK");
         JButton cancel = new JButton("Cancel");
         ok.addActionListener(ev -> {
-            String h = heapValue(String.valueOf(heap.getEditor().getItem()));
-            if(!h.matches("\\d+[mg]")) {
-                JOptionPane.showMessageDialog(d, "Game memory is a number of GB or MB: 2 GB, 512 MB.", "Options", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            settings.set("heap", h);
+            settings.set("heap", heap.getValue() + "g");
             settings.set("heap.pretouch", String.valueOf(pretouch.isSelected()));
             settings.set("gc", (gc.getSelectedIndex() == 1) ? "g1" : "zgc");
             settings.set("ui.scale", String.valueOf(uiScale.isSelected()));
@@ -136,24 +146,26 @@ final class OptionsDialog {
         d.setVisible(true);
     }
 
-    /** <code>2g</code> as <code>2 GB</code>, <code>512m</code> as <code>512 MB</code>; anything else as it is. */
-    static String heapLabel(String value) {
+    /** A heap setting as whole gigabytes: <code>4g</code> is 4, <code>1536m</code> rounds up to 2, anything else is
+     *  the bar's low end. */
+    static int heapGb(String value) {
         String v = value.trim().toLowerCase();
         if(v.matches("\\d+g"))
-            return v.substring(0, v.length() - 1) + " GB";
+            return Integer.parseInt(v.substring(0, v.length() - 1));
         if(v.matches("\\d+m"))
-            return v.substring(0, v.length() - 1) + " MB";
-        return value;
+            return (Integer.parseInt(v.substring(0, v.length() - 1)) + 1023) / 1024;
+        return MIN_GB;
     }
 
-    /** <code>2 GB</code> (or <code>2gb</code>, <code>2g</code>) as <code>2g</code>; the trimmed text otherwise. */
-    static String heapValue(String label) {
-        String v = label.trim().toLowerCase().replace(" ", "");
-        if(v.matches("\\d+gb?"))
-            return v.replaceAll("[^0-9]", "") + "g";
-        if(v.matches("\\d+mb?"))
-            return v.replaceAll("[^0-9]", "") + "m";
-        return v;
+    /** The machine's physical memory in whole gigabytes, or 0 when it cannot be read. */
+    static long totalMemoryGb() {
+        try {
+            if(ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os)
+                return Math.round(os.getTotalMemorySize() / (1024.0 * 1024 * 1024));
+        } catch(RuntimeException | LinkageError e) {
+            // a runtime without jdk.management: the bar takes its fallback
+        }
+        return 0;
     }
 
     /** The form's rows: a name, a control, and a line under them saying what the setting does. */

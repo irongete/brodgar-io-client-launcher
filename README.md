@@ -43,11 +43,12 @@ game's own server, the one its `haven-config.properties` names; on, it is starte
 proxy's address.
 
 **Options...** is how the game is started, each setting under a plain name with a line saying what it does
-and, at the bottom, the command it all makes: the memory the game is given and whether it is all reserved
-at start, how memory is cleaned up (concurrently, or in short stops), whether Windows may scale the
-window, which kind of network address to try first, extra Java options, the resource cache address, and
-whether to look for a newer version when the launcher opens. What every client needs to run at all — the
-module exports, native access, the Unsafe allowance — is not on offer.
+and, at the bottom, the command it all makes: the memory the game is given (a bar from 2 GB to half of
+what the PC has, never past 16 GB) and whether it is all reserved at start, how memory is cleaned up
+(concurrently, or in short stops), whether Windows may scale the window, which kind of network address to
+try first, extra Java options, the resource cache address, and whether to look for a newer version when
+the launcher opens. What every client needs to run at all — the module exports, native access, the
+Unsafe allowance — is not on offer.
 
 Everything is remembered in `launcher.properties`. The launcher speaks English only, and so does its
 runtime: it carries no locale data beyond the JDK's built-in English.
@@ -58,7 +59,7 @@ runtime: it carries no locale data beyond the JDK's built-in English.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `heap` | `2g` | memory the game is given, reserved when it starts (`-Xms` = `-Xmx`) |
+| `heap` | `2g` | memory the game is given, reserved when it starts (`-Xms` = `-Xmx`); the dialog's bar sets whole GB |
 | `heap.pretouch` | `true` | touch all of it when the game starts (`-XX:+AlwaysPreTouch`) |
 | `gc` | `zgc` | `zgc` frees memory concurrently (`-XX:+UseZGC`); `g1` is Java's default collector |
 | `ui.scale` | `false` | `true` lets Windows scale the window; `false` passes `-Dsun.java2d.uiScale.enabled=false` |
