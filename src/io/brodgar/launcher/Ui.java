@@ -4,8 +4,10 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.lang.reflect.InvocationTargetException;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -16,18 +18,19 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * The launcher's one window: a status line, a progress bar and one button — <b>Play</b> once the client is
- * ready, <b>Retry</b> when nothing is installed and the download failed. Every method may be called from any
- * thread; the button's action runs off the event thread, so it may block.
+ * The launcher's one window: a status line, a progress bar, the resource-proxy checkbox and one button —
+ * <b>Play</b> once the client is ready, <b>Retry</b> when nothing is installed and the download failed. Every
+ * method may be called from any thread; the button's action runs off the event thread, so it may block.
  */
 final class Ui {
     private final JFrame frame;
     private final JLabel status;
     private final JProgressBar bar;
     private final JButton button;
+    private final JCheckBox proxy;
     private Runnable action;
 
-    private Ui(String title) {
+    private Ui(String title, boolean proxyOn, Consumer<Boolean> onProxy) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
@@ -46,9 +49,12 @@ final class Ui {
             if(a != null)
                 new Thread(a, "launcher-action").start();
         });
+        proxy = new JCheckBox("Use brodgar.io resource cache proxy", proxyOn);
+        proxy.addActionListener(ev -> onProxy.accept(proxy.isSelected()));
         JPanel middle = new JPanel(new BorderLayout(0, 8));
         middle.add(status, BorderLayout.NORTH);
-        middle.add(bar, BorderLayout.SOUTH);
+        middle.add(bar, BorderLayout.CENTER);
+        middle.add(proxy, BorderLayout.SOUTH);
         JPanel right = new JPanel(new BorderLayout());
         right.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
         right.add(button, BorderLayout.CENTER);
@@ -65,10 +71,12 @@ final class Ui {
         frame.setVisible(true);
     }
 
-    static Ui open(String title) {
+    /** Open the window; <code>proxyOn</code> is the checkbox's first state and <code>onProxy</code> hears every
+     *  change, on the event thread. */
+    static Ui open(String title, boolean proxyOn, Consumer<Boolean> onProxy) {
         Ui[] out = new Ui[1];
         try {
-            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title));
+            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, proxyOn, onProxy));
         } catch(InterruptedException | InvocationTargetException e) {
             throw new IllegalStateException(e);
         }

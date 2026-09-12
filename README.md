@@ -18,7 +18,8 @@ Brodgar/
 
 ## What it does
 
-The window opens at once — a status line, a progress bar and one button — and the work runs behind it:
+The window opens at once — a status line, a progress bar, a checkbox and one button — and the work runs
+behind it:
 
 1. It reads the tag last installed and asks GitHub for the latest release's tag: the redirect
    `github.com/irongete/brodgar-io-client/releases/latest` answers with, so no API, no token, no rate limit.
@@ -29,6 +30,10 @@ The window opens at once — a status line, a progress bar and one button — an
    with the flags the client's own `ant run` and `run.bat` use, and the launcher closes. When GitHub
    cannot be reached, the installed client is still offered; when nothing is installed and the download
    failed, the button reads **Retry**.
+
+**Use brodgar.io resource cache proxy**, the checkbox: off, the client reads the game's resources from the
+game's own server, the one its `haven-config.properties` names; on, it is started with
+`-U http://brodgar.io/res/`, the cache proxy. The choice is remembered in `launcher.properties`.
 
 GitHub's `latest` skips a release marked **pre-release**, so a release the launcher should install is
 published as a plain release. The launcher speaks English only, and so does its runtime: it carries no
@@ -43,7 +48,8 @@ locale data beyond the JDK's built-in English.
 | `heap` | `2g` | the client's heap, fixed and pre-touched |
 | `repo` | `irongete/brodgar-io-client` | where the client's releases are |
 | `asset.prefix` | `brodgar-io-client-` | what the release zip's name starts with |
-| `resurl` | `http://brodgar.io/res/` | the resource server the client is told to use (`-U`) |
+| `resource.proxy` | `false` | the checkbox: read resources through the brodgar.io cache proxy (`-U`) |
+| `resource.proxy.url` | `http://brodgar.io/res/` | the proxy's URL |
 | `check.updates` | `true` | `false` never looks for a release and offers what is installed |
 | `java.opts` | *(empty)* | extra JVM options for the client, space-separated |
 

@@ -27,6 +27,9 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>The window opens at once; the release check and the download run behind it, and the button becomes
  * <b>Play</b> when the client is ready — or <b>Retry</b> when nothing is installed and the download failed.
+ * The checkbox beside the bar is the brodgar.io resource cache proxy: off, the client reads the game's own
+ * resource server (what its shipped haven-config.properties names); on, it is started with <code>-U</code>
+ * and the proxy's URL, and the choice is remembered in <code>launcher.properties</code>.
  * Run with <code>--check</code> it resolves the latest release and prints what it would download and how it
  * would start the client, and exits without touching anything or opening a window.
  */
@@ -55,7 +58,7 @@ public final class Launcher {
             check(home, settings, client, java);
             return;
         }
-        Ui ui = Ui.open(title(client.installedVersion()));
+        Ui ui = Ui.open(title(client.installedVersion()), settings.resourceProxy(), settings::resourceProxy);
         Launcher l = new Launcher(home, settings, client, java, ui);
         new Thread(l::prepare, "launcher-update").start();
     }
@@ -143,7 +146,8 @@ public final class Launcher {
     }
 
     /** The client's command line: the flags <code>ant run</code> and <code>run.bat</code> pass, plus the ones a
-     *  runtime past 23 wants, then whatever <code>java.opts</code> adds. */
+     *  runtime past 23 wants, then whatever <code>java.opts</code> adds — and <code>-U</code> with the cache
+     *  proxy's URL only while the checkbox is on. */
     static List<String> command(Path java, Settings settings) {
         int feature = Runtime.version().feature();   // the same image runs the launcher and the client
         List<String> cmd = new ArrayList<>();
@@ -165,8 +169,10 @@ public final class Launcher {
         cmd.addAll(settings.javaOpts());
         cmd.add("-jar");
         cmd.add("hafen.jar");
-        cmd.add("-U");
-        cmd.add(settings.resUrl());
+        if(settings.resourceProxy()) {
+            cmd.add("-U");
+            cmd.add(settings.resourceProxyUrl());
+        }
         return cmd;
     }
 
@@ -181,6 +187,7 @@ public final class Launcher {
         } catch(Exception e) {
             System.out.println("latest:    unreachable: " + e);
         }
+        System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off (the game's own resource server)"));
         System.out.println("command:   " + String.join(" ", command(java, settings)));
         System.out.println("cwd:       " + client.dir());
     }
