@@ -14,7 +14,7 @@
 <project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
-  <property name="version" value="1.0.0" />
+  <property name="version" value="1.0.1" />
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
@@ -70,7 +70,9 @@
   </target>
 
   <target name="release" depends="dist">
-    <zip destfile="build/${app.name}-launcher-${version}-windows.zip" basedir="build/dist" includes="${app.name}/**" />
+    <!-- The files sit at the zip's root, no folder around them: Windows' Extract All makes one folder, named after
+         the zip, and a folder inside it would give the player two. -->
+    <zip destfile="build/${app.name}-launcher-${version}-windows.zip" basedir="build/dist/${app.name}" />
     <echo message="Release asset: build/${app.name}-launcher-${version}-windows.zip" />
   </target>
 

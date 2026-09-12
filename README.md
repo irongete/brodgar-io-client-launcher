@@ -5,7 +5,7 @@ at the newest GitHub release of the chosen channel and starts it, on the Play bu
 that ships beside the launcher — so nothing else has to be installed.
 
 ```text
-Brodgar/
+Brodgar-launcher-<version>-windows/   the zip, unzipped: its files sit at its root, so Extract All makes this one folder
   run.bat                starts the launcher on the runtime beside it
   launcher.jar
   runtime/               the Java runtime (jlink) — the launcher's and the client's
@@ -104,11 +104,12 @@ Every step runs on it — `javac`, `jlink`, the development runs. Without that l
 | `ant jar` | `build/launcher.jar`, its manifest carrying the version |
 | `ant runtime` | `build/runtime/`, jlink of the modules `hafen.jar` and its libraries need (by `jdeps`) |
 | `ant dist` | `build/dist/Brodgar/`, the folder above: the jar, `run.bat`, the runtime |
-| `ant release` | `build/Brodgar-launcher-<version>-windows.zip`, the release asset |
+| `ant release` | `build/Brodgar-launcher-<version>-windows.zip`, the release asset: that folder's contents at the zip's root |
 | `ant check` | the launcher's `--check`, its folder being this one |
 | `ant run` | the launcher in this folder (`client/` and `launcher.properties` appear here; ignored by git) |
 
-`-Dversion=1.0.0` names the launcher's version (`1.0.0` by default). Nothing built is committed: the
+`-Dversion=1.0.1` names the launcher's version (without it, `build.xml`'s default: the last release's, so a
+development build says what it is based on). Nothing built is committed: the
 runtime is a product of the JDK on the build machine, and the release asset is where it travels.
 
 ## Release
