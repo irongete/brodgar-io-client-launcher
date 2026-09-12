@@ -39,6 +39,15 @@ final class GitHubRelease {
     /** One release as the API lists it. */
     record Release(String tag, boolean prerelease) {}
 
+    /** GitHub answered, and the channel has nothing: not a network failure, and nothing to retry — the
+     *  dropdown is the way out. */
+    static final class NoReleaseException extends IOException {
+        private static final long serialVersionUID = 1L;
+        NoReleaseException(String message) {
+            super(message);
+        }
+    }
+
     /** The tag the channel should have installed: the highest version the channel admits, or GitHub's own
      *  latest plain release when the API cannot be asked. */
     static String newestTag(String repo, Channel channel) throws IOException, InterruptedException {
@@ -58,7 +67,7 @@ final class GitHubRelease {
                 best = r;
         }
         if(best == null)
-            throw new IOException("no release on the " + channel.label.toLowerCase() + " channel at github.com/" + repo);
+            throw new NoReleaseException("no " + channel.label.toLowerCase() + " published at github.com/" + repo);
         return best.tag();
     }
 
@@ -135,8 +144,10 @@ final class GitHubRelease {
             .timeout(Duration.ofSeconds(20)).GET().build();
         HttpResponse<Void> res = http.send(req, HttpResponse.BodyHandlers.discarding());
         String location = res.headers().firstValue("location").orElse(null);
+        if(res.statusCode() == 200)
+            throw new NoReleaseException("no release published at github.com/" + repo);   // the releases page itself, no redirect
         if((res.statusCode() / 100 != 3) || (location == null) || !location.contains("/releases/tag/"))
-            throw new IOException("no release found at github.com/" + repo + " (HTTP " + res.statusCode() + ")");
+            throw new IOException("unexpected answer from github.com/" + repo + " (HTTP " + res.statusCode() + ")");
         return location.substring(location.lastIndexOf('/') + 1);
     }
 

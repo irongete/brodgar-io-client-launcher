@@ -1,18 +1,17 @@
 <?xml version="1.0" ?>
 
-<!-- The Brodgar.io client launcher. `ant image` builds the folder a player unzips and runs:
-       build/image/Brodgar/Brodgar.exe   the launcher
-       build/image/Brodgar/runtime/      a Java runtime cut from the JDK (jlink), which also runs the client
-       build/image/Brodgar/app/          launcher.jar
+<!-- The Brodgar.io client launcher. `ant dist` builds the folder a player unzips and runs:
+       build/dist/Brodgar/run.bat        starts the launcher on the runtime beside it
+       build/dist/Brodgar/launcher.jar
+       build/dist/Brodgar/runtime/       a Java runtime cut from the JDK (jlink), which also runs the client
      `ant release` zips it. Nothing here is fetched from the network and nothing built is committed: the
      runtime is a product of the JDK on the build machine, and the release asset is where it travels.
 
      The JDK matters twice. It is the runtime the player gets, so it is the one the client is verified on
-     (a Temurin LTS, 25 today); and it has to carry jlink and jpackage, so it is a JDK, not a JRE. It is
-     `jdk.home` in build.properties, a JDK unpacked in this folder (jdk-*, ignored by git), and every step of
-     the build runs on it: javac, jlink, jpackage, and the development runs. Without that line it is the JDK
-     ant itself runs on. -->
-<project name="brodgar-launcher" default="image">
+     (a Temurin LTS, 25 today); and it has to carry jlink, so it is a JDK, not a JRE. It is `jdk.home` in
+     build.properties, a JDK unpacked in this folder (jdk-*, ignored by git), and every step of the build
+     runs on it: javac, jlink, and the development runs. Without that line it is the JDK ant itself runs on. -->
+<project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
   <property name="version" value="0.1.0" />
@@ -22,16 +21,6 @@
        handshake wants on a JDK before 22 (an empty module after). English only: no jdk.localedata. -->
   <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,jdk.unsupported,jdk.crypto.ec,jdk.charsets" />
 
-  <!-- jpackage wants a plain x.y.z on Windows: the tag's leading digits, `0.1.0` of `0.1.0-beta.1`. -->
-  <loadresource property="version.numeric">
-    <propertyresource name="version" />
-    <filterchain>
-      <tokenfilter>
-        <replaceregex pattern="[^0-9.].*$" replace="" />
-      </tokenfilter>
-    </filterchain>
-  </loadresource>
-
   <target name="compile">
     <mkdir dir="build/classes" />
     <javac srcdir="src" destdir="build/classes" release="21" debug="on" includeantruntime="no"
@@ -40,12 +29,13 @@
     </javac>
   </target>
 
+  <!-- The version travels in the manifest: the window title reads it back as Implementation-Version. -->
   <target name="jar" depends="compile">
-    <mkdir dir="build/input" />
-    <jar destfile="build/input/launcher.jar">
+    <jar destfile="build/launcher.jar">
       <fileset dir="build/classes" />
       <manifest>
         <attribute name="Main-Class" value="${main.class}" />
+        <attribute name="Implementation-Title" value="Brodgar.io launcher" />
         <attribute name="Implementation-Version" value="${version}" />
       </manifest>
     </jar>
@@ -66,57 +56,34 @@
     </exec>
   </target>
 
-  <!-- jpackage's last step stamps the version resources into the fresh Brodgar.exe, and on Windows an
-       antivirus scanning that new file can hold it for a moment: `EndUpdateResource ... system error 110`.
-       The image is deleted and made again, up to three times. -->
-  <target name="image" depends="jar, runtime">
-    <delete dir="build/image" />
-    <mkdir dir="build/image" />
-    <retry retrycount="2" retrydelay="3000">
-      <sequential>
-	<delete dir="build/image/${app.name}" />
-	<exec executable="${jdk.home}/bin/jpackage" failonerror="true">
-	  <arg value="--type" />
-	  <arg value="app-image" />
-	  <arg value="--name" />
-	  <arg value="${app.name}" />
-	  <arg value="--app-version" />
-	  <arg value="${version.numeric}" />
-	  <arg value="--vendor" />
-	  <arg value="Brodgar.io" />
-	  <arg value="--input" />
-	  <arg value="build/input" />
-	  <arg value="--main-jar" />
-	  <arg value="launcher.jar" />
-	  <arg value="--main-class" />
-	  <arg value="${main.class}" />
-	  <arg value="--runtime-image" />
-	  <arg value="build/runtime" />
-	  <arg value="--java-options" />
-	  <arg value="-Dlauncher.version=${version}" />
-	  <arg value="--dest" />
-	  <arg value="build/image" />
-	</exec>
-      </sequential>
-    </retry>
-    <echo message="Launcher ready: build/image/${app.name}/${app.name}.exe" />
+  <!-- The folder handed to a player: the jar, run.bat (CRLF, as a .bat is read), and the runtime. -->
+  <target name="dist" depends="jar, runtime">
+    <delete dir="build/dist" />
+    <mkdir dir="build/dist/${app.name}" />
+    <copy file="build/launcher.jar" todir="build/dist/${app.name}" />
+    <fixcrlf srcdir="etc" includes="run.bat" destdir="build/dist/${app.name}" eol="crlf" />
+    <copy todir="build/dist/${app.name}/runtime">
+      <fileset dir="build/runtime" />
+    </copy>
+    <echo message="Launcher ready: build/dist/${app.name}/run.bat" />
   </target>
 
-  <target name="release" depends="image">
-    <zip destfile="build/${app.name}-launcher-${version}-windows.zip" basedir="build/image" includes="${app.name}/**" />
+  <target name="release" depends="dist">
+    <zip destfile="build/${app.name}-launcher-${version}-windows.zip" basedir="build/dist" includes="${app.name}/**" />
     <echo message="Release asset: build/${app.name}-launcher-${version}-windows.zip" />
   </target>
 
-  <!-- Development: the launcher on the build JDK, in this folder (client/ and launcher.properties appear
-       here and are ignored by git). `ant check` resolves the release and prints the command instead. -->
+  <!-- Development: the launcher on the build JDK, its folder being this one (client/ and launcher.properties
+       appear here and are ignored by git). `ant check` resolves the release and prints the command instead. -->
   <target name="run" depends="jar">
-    <java jar="build/input/launcher.jar" fork="true" jvm="${jdk.home}/bin/java">
-      <sysproperty key="launcher.version" value="${version}-dev" />
+    <java jar="build/launcher.jar" fork="true" jvm="${jdk.home}/bin/java">
+      <sysproperty key="launcher.home" value="${basedir}" />
     </java>
   </target>
 
   <target name="check" depends="jar">
-    <java jar="build/input/launcher.jar" fork="true" jvm="${jdk.home}/bin/java">
+    <java jar="build/launcher.jar" fork="true" jvm="${jdk.home}/bin/java">
+      <sysproperty key="launcher.home" value="${basedir}" />
       <arg value="--check" />
     </java>
   </target>

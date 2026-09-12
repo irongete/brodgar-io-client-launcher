@@ -1,23 +1,25 @@
 package io.brodgar.launcher;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The Brodgar.io client launcher: keeps <code>client/</code> at the latest GitHub release of the client and
- * starts it, on the Play button, on the runtime that ships beside this launcher.
+ * The Brodgar.io client launcher: keeps <code>client/</code> at the newest GitHub release of the client on the
+ * chosen channel and starts it, on the Play button, on the runtime that ships beside this launcher.
  *
- * <p>Everything lives in one folder, the one the launcher executable is in:
+ * <p>Everything lives in one folder, the one <code>launcher.jar</code> is in:
  * <pre>
- *   Brodgar.exe            the launcher (jpackage)
+ *   run.bat                starts the launcher on the runtime below
+ *   launcher.jar
  *   runtime/               the Java runtime (jlink), the launcher's and the client's
- *   app/launcher.jar
  *   client/                the client release: hafen.jar, lib/, the resource jars, addons/
  *   client/savedata/       the player's own; never written by the launcher
  *   client/installed-version
@@ -25,15 +27,16 @@ import java.util.concurrent.TimeUnit;
  *   client.log             what the client printed on its last run
  * </pre>
  *
- * <p>The window opens at once; the release check and the download run behind it, and the button becomes
- * <b>Play</b> when the client is ready — or <b>Retry</b> when nothing is installed and the download failed.
- * The dropdown is the channel — <b>Release</b> installs plain releases, <b>Beta</b> the newest of everything,
- * pre-releases included — and picking one looks again at once. The checkbox is the brodgar.io resource cache
- * proxy: off, the client reads the game's own resource server (what its shipped haven-config.properties
- * names); on, it is started with <code>-U</code> and the proxy's URL. Both are remembered in
- * <code>launcher.properties</code>.
- * Run with <code>--check</code> it resolves the latest release and prints what it would download and how it
- * would start the client, and exits without touching anything or opening a window.
+ * <p>The window opens at once; the release check and the download run behind it, and the big button becomes
+ * <b>Play</b> when the channel's newest release is installed — greyed out while the channel has nothing,
+ * <b>Retry</b> when nothing is installed and the download failed. The dropdown is the channel — <b>Release</b>
+ * installs plain releases, <b>Beta</b> the newest of everything, pre-releases included — and picking one looks
+ * again at once. The checkbox is the brodgar.io resource cache proxy: off, the client reads the game's own
+ * resource server (what its shipped haven-config.properties names); on, it is started with <code>-U</code>
+ * and the proxy's URL. Options opens the {@link OptionsDialog}. Everything is remembered in
+ * <code>launcher.properties</code>. Run with <code>--check</code> it resolves the channel's newest release and
+ * prints what it would download and how it would start the client, and exits without touching anything or
+ * opening a window.
  */
 public final class Launcher {
     private final Path home;
@@ -62,40 +65,60 @@ public final class Launcher {
         }
         Launcher[] l = new Launcher[1];
         Ui ui = Ui.open(title(client.installedVersion()), settings.channel(), c -> l[0].channel(c),
-                        settings.resourceProxy(), settings::resourceProxy);
+                        settings.resourceProxy(), settings::resourceProxy, () -> l[0].options());
         l[0] = new Launcher(home, settings, client, java, ui);
         new Thread(l[0]::prepare, "launcher-update").start();
     }
 
+    /** What the release check left the launcher with. */
+    private enum Outcome {
+        /** The channel's newest release is installed. */
+        READY,
+        /** GitHub answered and the channel has nothing: nothing to play, nothing to retry. */
+        NO_RELEASE,
+        /** GitHub could not be reached or the download failed, and a client is installed: play that. */
+        INSTALLED_ANYWAY,
+        /** GitHub could not be reached or the download failed, and nothing is installed: retry. */
+        NOTHING,
+    }
+
     /** The dropdown: remember the channel and look for its newest release at once. Only reachable while no
-     *  work is going on, since the window holds the dropdown until Play or Retry is offered. */
+     *  work is going on, since the window holds the dropdown until the check is over. */
     private void channel(Channel c) {
         settings.channel(c);
         new Thread(this::prepare, "launcher-update").start();
     }
 
-    /** Bring the client up to date, then offer Play — or Retry, when there is nothing to play. */
-    private void prepare() {
-        ui.busy();
-        try {
-            update();
-        } catch(Exception e) {
-            ui.status("Unexpected: " + e);
-        }
-        if(client.isInstalled())
-            ui.ready("Play", this::play);
-        else
-            ui.ready("Retry", this::prepare);
+    /** The Options button, on the event thread: modal, so nothing else happens while it is open. */
+    private void options() {
+        OptionsDialog.show(ui.frame(), settings, java);
     }
 
-    /** Fetch the latest release when it differs from the installed one; GitHub being out of reach is said in
-     *  the status line and the installed client, if any, is still offered. */
-    private void update() {
+    /** Bring the client up to date, then offer what there is. */
+    private void prepare() {
+        ui.busy();
+        Outcome o;
+        try {
+            o = update();
+        } catch(Exception e) {
+            ui.status("Unexpected: " + e);
+            o = client.isInstalled() ? Outcome.INSTALLED_ANYWAY : Outcome.NOTHING;
+        }
+        switch(o) {
+            case READY, INSTALLED_ANYWAY -> ui.ready("Play", this::play);
+            case NO_RELEASE -> ui.idle();
+            case NOTHING -> ui.ready("Retry", this::prepare);
+        }
+    }
+
+    /** Fetch the channel's newest release when it differs from the installed one, saying in the status line
+     *  what happened. */
+    private Outcome update() {
         String installed = client.installedVersion();
         if(!settings.checkUpdates()) {
-            ui.status((installed == null) ? "Update check is off (launcher.properties) and no client is installed."
-                                          : "Client " + installed + " — update check is off (launcher.properties).");
-            return;
+            ui.status((installed == null) ? "Update check is off (Options) and no client is installed."
+                                          : "Client " + installed + " — update check is off (Options).");
+            return (installed == null) ? Outcome.NO_RELEASE : Outcome.READY;
         }
         Channel channel = settings.channel();
         String kind = channel.label.toLowerCase();
@@ -103,14 +126,17 @@ public final class Launcher {
         try {
             ui.status("Looking for the newest " + kind + "...");
             latest = GitHubRelease.newestTag(settings.repo(), channel);
+        } catch(GitHubRelease.NoReleaseException e) {
+            ui.status("No " + kind + " has been published yet" + ((installed == null) ? "." : " — pick another channel to play " + installed + "."));
+            return Outcome.NO_RELEASE;
         } catch(Exception e) {
-            ui.status((installed == null) ? "No " + kind + " to install: " + e.getMessage()
-                                          : "No " + kind + " found (" + e.getMessage() + ") — client " + installed + " is installed.");
-            return;
+            ui.status((installed == null) ? "GitHub is unreachable: " + e.getMessage()
+                                          : "GitHub is unreachable — client " + installed + " is installed.");
+            return (installed == null) ? Outcome.NOTHING : Outcome.INSTALLED_ANYWAY;
         }
         if(latest.equals(installed)) {
             ui.status("Client " + installed + " is the newest " + kind + ".");
-            return;
+            return Outcome.READY;
         }
         try {
             String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix());
@@ -123,9 +149,11 @@ public final class Launcher {
             Files.deleteIfExists(zip);
             ui.title(title(latest));
             ui.status("Client " + latest + " is ready.");
+            return Outcome.READY;
         } catch(Exception e) {
             ui.status((installed == null) ? "The download failed: " + e.getMessage()
                                           : "The update failed (" + e.getMessage() + ") — client " + installed + " is installed.");
+            return (installed == null) ? Outcome.NOTHING : Outcome.INSTALLED_ANYWAY;
         }
     }
 
@@ -158,33 +186,46 @@ public final class Launcher {
         return pb.start();
     }
 
-    /** The client's command line: the flags <code>ant run</code> and <code>run.bat</code> pass, plus the ones a
-     *  runtime past 23 wants, then whatever <code>java.opts</code> adds — and <code>-U</code> with the cache
-     *  proxy's URL only while the checkbox is on. */
-    static List<String> command(Path java, Settings settings) {
-        int feature = Runtime.version().feature();   // the same image runs the launcher and the client
+    /** The client's command line as the settings stand. */
+    static List<String> command(Path java, Settings s) {
+        return command(java, s.launch());
+    }
+
+    /**
+     * The client's command line from its parts — what the Options dialog previews and what Play runs. The
+     * settings shape the memory, the collector, the window scaling and the address preference; the rest is
+     * what every client needs: the module exports and native access <code>run.bat</code> passes, plus what a
+     * runtime past 23 wants; then whatever extra options were given, and <code>-U</code> with the cache proxy's
+     * URL only while the checkbox is on.
+     */
+    static List<String> command(Path java, Settings.Launch l) {
+        int feature = Runtime.version().feature();   // the same runtime runs the launcher and the client
         List<String> cmd = new ArrayList<>();
         cmd.add(java.toString());
-        cmd.add("-Xms" + settings.heap());
-        cmd.add("-Xmx" + settings.heap());
-        cmd.add("-XX:+AlwaysPreTouch");
-        cmd.add("-XX:+UseZGC");
-        if(feature < 24)
-            cmd.add("-XX:+ZGenerational");                   // the default from 23, an obsolete flag from 24
+        cmd.add("-Xms" + l.heap());
+        cmd.add("-Xmx" + l.heap());
+        if(l.pretouch())
+            cmd.add("-XX:+AlwaysPreTouch");
+        if(l.gc().equals("zgc")) {
+            cmd.add("-XX:+UseZGC");
+            if(feature < 24)
+                cmd.add("-XX:+ZGenerational");               // the default from 23, an obsolete flag from 24
+        }
         if(feature >= 23)
             cmd.add("--sun-misc-unsafe-memory-access=allow");  // JOGL and LWJGL still use it; 24+ warns without this
         cmd.add("--add-exports=java.base/java.lang=ALL-UNNAMED");
         cmd.add("--add-exports=java.desktop/sun.awt=ALL-UNNAMED");
         cmd.add("--add-exports=java.desktop/sun.java2d=ALL-UNNAMED");
         cmd.add("--enable-native-access=ALL-UNNAMED");
-        cmd.add("-Dsun.java2d.uiScale.enabled=false");
-        cmd.add("-Djava.net.preferIPv6Addresses=system");
-        cmd.addAll(settings.javaOpts());
+        if(!l.uiScale())
+            cmd.add("-Dsun.java2d.uiScale.enabled=false");
+        cmd.add("-Djava.net.preferIPv6Addresses=" + l.ipv6());
+        cmd.addAll(l.opts());
         cmd.add("-jar");
         cmd.add("hafen.jar");
-        if(settings.resourceProxy()) {
+        if(l.proxy()) {
             cmd.add("-U");
-            cmd.add(settings.resourceProxyUrl());
+            cmd.add(l.proxyUrl());
         }
         return cmd;
     }
@@ -198,20 +239,32 @@ public final class Launcher {
             String latest = GitHubRelease.newestTag(settings.repo(), settings.channel());
             System.out.println("newest:    " + latest);
             System.out.println("asset:     " + GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix()));
+        } catch(GitHubRelease.NoReleaseException e) {
+            System.out.println("newest:    none on this channel (" + e.getMessage() + ")");
         } catch(Exception e) {
-            System.out.println("newest:    none: " + e);
+            System.out.println("newest:    unreachable: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off (the game's own resource server)"));
         System.out.println("command:   " + String.join(" ", command(java, settings)));
         System.out.println("cwd:       " + client.dir());
     }
 
-    /** The folder the launcher lives in: the executable's, under jpackage; the working directory when run as a
-     *  bare jar during development. */
+    /** The folder the launcher lives in: <code>launcher.home</code> when set (the development run names this
+     *  folder), else the folder <code>launcher.jar</code> is in, else the working directory. */
     static Path home() {
-        String exe = System.getProperty("jpackage.app-path");
-        if(exe != null)
-            return Paths.get(exe).toAbsolutePath().getParent();
+        String set = System.getProperty("launcher.home");
+        if(set != null)
+            return Paths.get(set).toAbsolutePath();
+        try {
+            CodeSource src = Launcher.class.getProtectionDomain().getCodeSource();
+            if(src != null) {
+                Path self = Paths.get(src.getLocation().toURI());
+                if(Files.isRegularFile(self))               // the jar; a classes/ folder is a development run
+                    return self.toAbsolutePath().getParent();
+            }
+        } catch(URISyntaxException | RuntimeException e) {
+            // fall through to the working directory
+        }
         return Paths.get("").toAbsolutePath();
     }
 
@@ -225,8 +278,9 @@ public final class Launcher {
         return Files.exists(own) ? own : Paths.get(System.getProperty("java.home"), "bin", "java");
     }
 
+    /** The window title: the launcher's version from the jar's manifest, and the installed client's. */
     private static String title(String installed) {
-        String v = System.getProperty("launcher.version");
+        String v = Launcher.class.getPackage().getImplementationVersion();
         return "Brodgar.io" + ((v == null) ? "" : " launcher " + v) + ((installed == null) ? "" : " · client " + installed);
     }
 

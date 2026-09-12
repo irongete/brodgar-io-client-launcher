@@ -1,8 +1,10 @@
 package io.brodgar.launcher;
 
-import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.lang.reflect.InvocationTargetException;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
@@ -19,11 +21,12 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * The launcher's one window: a status line, a progress bar, the channel dropdown, the resource-proxy checkbox
- * and one button — <b>Play</b> once the client is ready, <b>Retry</b> when nothing is installed and the
- * download failed. Every method may be called from any thread; the button's action runs off the event
- * thread, so it may block. The dropdown is held while work is going on, since changing the channel starts
- * work of its own.
+ * The launcher's one window, a grid of three rows: the status line and the progress bar with the big button
+ * beside them — <b>Play</b> once the channel's newest release is installed, <b>Retry</b> when nothing is
+ * installed and the download failed, greyed out while the channel has nothing — and under them the
+ * resource-proxy checkbox, the channel dropdown and <b>Options...</b>, in the button's column. Every method
+ * may be called from any thread; the big button's action runs off the event thread, so it may block. The
+ * dropdown is held while work is going on, since changing the channel starts work of its own.
  */
 final class Ui {
     private final JFrame frame;
@@ -34,7 +37,7 @@ final class Ui {
     private final JComboBox<Channel> channel;
     private Runnable action;
 
-    private Ui(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy) {
+    private Ui(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy, Runnable onOptions) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
@@ -46,13 +49,15 @@ final class Ui {
         bar.setIndeterminate(true);
         button = new JButton("Play");
         button.setFont(button.getFont().deriveFont(Font.BOLD, 15f));
-        button.setPreferredSize(new Dimension(120, 40));
+        button.setPreferredSize(new Dimension(130, 44));
         button.setEnabled(false);
         button.addActionListener(ev -> {
             Runnable a = action;
             if(a != null)
                 new Thread(a, "launcher-action").start();
         });
+        JButton options = new JButton("Options...");
+        options.addActionListener(ev -> onOptions.run());
         proxy = new JCheckBox("Use brodgar.io resource cache proxy", proxyOn);
         proxy.addActionListener(ev -> onProxy.accept(proxy.isSelected()));
         channel = new JComboBox<>(Channel.values());
@@ -68,42 +73,58 @@ final class Ui {
             if(channel.isEnabled() && (picked != null))
                 onChannel.accept(picked);
         });
-        JPanel options = new JPanel(new BorderLayout(16, 0));
-        options.add(proxy, BorderLayout.CENTER);
-        JPanel pick = new JPanel(new BorderLayout(6, 0));
-        pick.add(new JLabel("Channel:"), BorderLayout.WEST);
-        pick.add(channel, BorderLayout.CENTER);
-        options.add(pick, BorderLayout.EAST);
-        JPanel middle = new JPanel(new BorderLayout(0, 8));
-        middle.add(status, BorderLayout.NORTH);
-        middle.add(bar, BorderLayout.CENTER);
-        middle.add(options, BorderLayout.SOUTH);
-        JPanel right = new JPanel(new BorderLayout());
-        right.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
-        right.add(button, BorderLayout.CENTER);
-        JPanel panel = new JPanel(new BorderLayout());
+
+        JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        panel.add(middle, BorderLayout.CENTER);
-        panel.add(right, BorderLayout.EAST);
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(0, 0, 8, 0);
+        // row 0: the status, over both left columns
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 2; c.weightx = 1;
+        c.anchor = GridBagConstraints.WEST; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(status, c);
+        // row 1: the bar
+        c.gridy = 1;
+        panel.add(bar, c);
+        // rows 0-1, right column: the big button, filling both
+        c.gridx = 2; c.gridy = 0; c.gridwidth = 1; c.gridheight = 2; c.weightx = 0;
+        c.fill = GridBagConstraints.BOTH; c.insets = new Insets(0, 16, 8, 0);
+        panel.add(button, c);
+        // row 2: the checkbox, the channel, and Options in the button's column
+        c.gridheight = 1; c.insets = new Insets(0, 0, 0, 0);
+        c.gridx = 0; c.gridy = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(proxy, c);
+        JPanel pick = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 0));
+        pick.add(new JLabel("Channel:"));
+        pick.add(channel);
+        c.gridx = 1; c.weightx = 0; c.fill = GridBagConstraints.NONE; c.anchor = GridBagConstraints.EAST;
+        panel.add(pick, c);
+        c.gridx = 2; c.fill = GridBagConstraints.HORIZONTAL; c.insets = new Insets(0, 16, 0, 0);
+        panel.add(options, c);
+
         frame.setContentPane(panel);
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         frame.setResizable(false);
-        frame.setMinimumSize(new Dimension(520, 0));
+        frame.setMinimumSize(new Dimension(580, 0));
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
     }
 
     /** Open the window; <code>ch</code> and <code>proxyOn</code> are the dropdown's and the checkbox's first
-     *  states, and <code>onChannel</code> and <code>onProxy</code> hear every change, on the event thread. */
-    static Ui open(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy) {
+     *  states, <code>onChannel</code> and <code>onProxy</code> hear every change and <code>onOptions</code> the
+     *  Options button, all on the event thread. */
+    static Ui open(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy, Runnable onOptions) {
         Ui[] out = new Ui[1];
         try {
-            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, ch, onChannel, proxyOn, onProxy));
+            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, ch, onChannel, proxyOn, onProxy, onOptions));
         } catch(InterruptedException | InvocationTargetException e) {
             throw new IllegalStateException(e);
         }
         return out[0];
+    }
+
+    JFrame frame() {
+        return frame;
     }
 
     void title(String t) {
@@ -123,8 +144,8 @@ final class Ui {
         });
     }
 
-    /** Offer the one action there is: the button reads <code>label</code>, is enabled, and runs
-     *  <code>action</code> when pressed. The bar stops moving. */
+    /** Offer the one action there is: the big button reads <code>label</code>, is enabled, and runs
+     *  <code>action</code> when pressed. The bar stops moving and the dropdown is free again. */
     void ready(String label, Runnable action) {
         this.action = action;
         SwingUtilities.invokeLater(() -> {
@@ -133,6 +154,19 @@ final class Ui {
             button.setEnabled(true);
             channel.setEnabled(true);
             button.requestFocusInWindow();
+        });
+    }
+
+    /** Nothing to play and nothing to retry: the big button is greyed out, the dropdown is free — picking
+     *  another channel is the way out. */
+    void idle() {
+        action = null;
+        SwingUtilities.invokeLater(() -> {
+            bar.setIndeterminate(false);
+            bar.setValue(0);
+            button.setText("Play");
+            button.setEnabled(false);
+            channel.setEnabled(true);
         });
     }
 

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Cut a release of the Brodgar.io launcher: build the app image, zip, tag, push, publish on GitHub.
+  Cut a release of the Brodgar.io launcher: build the folder, zip, tag, push, publish on GitHub.
 
 .DESCRIPTION
   One command does the whole release:
@@ -10,9 +10,9 @@
     .\release.ps1 0.1.1                              release notes = the commit subjects since the last v* tag
 
   It refuses to run on a dirty tree or an existing tag, compiles from scratch, runs
-  `ant -Dversion=<version> release` -- launcher.jar, the jlink runtime cut from the JDK ant runs on (or
-  jdk.home in build.properties), the jpackage app image, and its zip -- tags HEAD as v<version>, pushes the
-  branch and the tag, and creates the GitHub release with the zip as its asset.
+  `ant -Dversion=<version> release` -- launcher.jar, run.bat, the jlink runtime cut from the JDK ant runs
+  on (or jdk.home in build.properties), and their zip -- tags HEAD as v<version>, pushes the branch and the
+  tag, and creates the GitHub release with the zip as its asset.
 
   A version with a suffix is published as a GitHub pre-release and a plain x.y.z as a plain release; -Channel
   says otherwise when it must. The runtime the player gets is the JDK this runs on, so run it on the JDK
@@ -86,7 +86,7 @@ if ($Notes) {
     }
 }
 
-# --- build: from scratch, then the app image and its zip -----------------------------------------------------
+# --- build: from scratch, then the folder and its zip -------------------------------------------------------
 $jdk = if (Test-Path build.properties) { (Get-Content build.properties | Where-Object { $_ -match '^jdk\.home=' } | Select-Object -First 1) -replace '^jdk\.home=', '' }
 if (-not $jdk) { $jdk = "the JDK ant runs on ($(& java -version 2>&1 | Select-Object -First 1))" }
 Write-Host "Building $title from $branch ($((git rev-parse --short HEAD).Trim())) with $jdk..."
