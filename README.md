@@ -18,20 +18,29 @@ Brodgar/
 
 ## What it does
 
-The window opens at once — a status line, a progress bar, the big button, and under them the resource-proxy
-checkbox, the channel dropdown and **Options...** — and the work runs behind it:
+The window opens at once — a status line, a progress bar, the big button, and under them the console
+checkbox, the resource-proxy checkbox, the channel dropdown and **Options...** — and the work runs behind it:
 
 1. It reads the tag last installed and asks GitHub for the channel's newest release: the list the API
    answers with (one call, no token), the highest version by semver order — `v0.1.0` above `v0.1.0-beta.3`,
    whatever order GitHub lists them in. Should the API be out of reach, the redirect
-   `github.com/irongete/brodgar-io-client/releases/latest` answers with stands in.
+   `github.com/irongete/brodgar-io-client/releases/latest` answers with — GitHub's latest plain release —
+   stands in; when there is none, the Release channel hears that nothing is published, and the Beta channel,
+   which cannot tell a beta from nothing that way, that GitHub is unreachable.
 2. When they differ, it downloads `releases/download/<tag>/brodgar-io-client-<version>.zip` (the version is
    the tag without its `v`), the bar showing how far, and unpacks it **over** `client/`: what the zip
-   carries is replaced, everything else stays — `savedata/`, and any addon the player dropped in.
+   carries is replaced, everything else stays — `savedata/`, and any addon the player dropped in. A download
+   that goes a minute without a byte is given up as failed, and what a failed or abandoned one left in
+   `client/` is removed the next time the launcher looks.
 3. The big button becomes **Play**. Pressed, it starts `runtime/bin/javaw.exe -jar hafen.jar` in `client/`
    with the command the Options dialog shows, and the launcher closes. While the channel has nothing
    published the button stays greyed out; when GitHub cannot be reached, the installed client is still
    offered; when nothing is installed and the download failed, the button reads **Retry**.
+
+**Start the client with a console window**, the checkbox: on, the client runs on `runtime/bin/java.exe` in a
+command window of its own, which shows what the client prints and stays open when the client ends in an
+error — the place to look when something goes wrong. Off, the client starts without a window and
+`client.log` holds what it printed.
 
 **Channel**, the dropdown: **Release** installs the highest plain release; **Beta** the highest of everything,
 pre-releases included — so a beta player gets a release too when that is the newest thing. The client's
@@ -43,7 +52,7 @@ game's own server, the one its `haven-config.properties` names; on, it is starte
 proxy's address.
 
 **Options...** is how the game is started, each setting under a plain name with a line saying what it does
-and, at the bottom, the command it all makes: the memory the game is given (a bar from 2 GB to half of
+and, at the bottom, the command it all makes: the memory the game is given (a bar from 1 GB to half of
 what the PC has, never past 16 GB) and whether it is all reserved at start, how memory is cleaned up
 (concurrently, or in short stops), whether Windows may scale the window, which kind of network address to
 try first, extra Java options, the resource cache address, and whether to look for a newer version when
@@ -55,7 +64,8 @@ runtime: it carries no locale data beyond the JDK's built-in English.
 
 ## Settings
 
-`launcher.properties`, beside the launcher; delete a line to get its default back.
+`launcher.properties`, beside the launcher, in UTF-8; delete a line to get its default back. What the
+launcher writes, it writes the way Java's `Properties` reads: a backslash in a value is doubled.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -66,6 +76,7 @@ runtime: it carries no locale data beyond the JDK's built-in English.
 | `ipv6` | `system` | `-Djava.net.preferIPv6Addresses=`: `system`, `true` (IPv6 first) or `false` (IPv4 first) |
 | `java.opts` | *(empty)* | extra JVM options for the client, space-separated |
 | `channel` | `beta` | the dropdown: `release` installs plain releases only, `beta` the newest of everything |
+| `console` | `false` | the checkbox: start the client on `java.exe` in a command window, kept open when it ends in an error |
 | `resource.proxy` | `false` | the checkbox: read resources through the brodgar.io cache proxy (`-U`) |
 | `resource.proxy.url` | `http://brodgar.io/res/` | the proxy's address |
 | `check.updates` | `true` | `false` never looks for a release and offers what is installed |

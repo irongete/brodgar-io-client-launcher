@@ -31,6 +31,24 @@ final class ClientInstall {
         return Files.exists(dir.resolve("hafen.jar"));
     }
 
+    /** Where a release zip is downloaded to before it is unpacked; the download in progress is beside it as
+     *  <code>download.tmp.part</code>. */
+    Path download() {
+        return dir.resolve("download.tmp");
+    }
+
+    /** Remove what a download left behind — the zip of an install that failed, the part of one the window was
+     *  closed on — so a leftover does not stay for good. Nothing else is touched. */
+    void tidy() {
+        for(Path p : new Path[] {download(), dir.resolve(download().getFileName() + ".part")}) {
+            try {
+                Files.deleteIfExists(p);
+            } catch(IOException e) {
+                // in use, or read-only: the next download overwrites it anyway
+            }
+        }
+    }
+
     /** The tag last installed, or null. */
     String installedVersion() {
         try {

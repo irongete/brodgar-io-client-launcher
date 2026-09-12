@@ -13,6 +13,8 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.DoubleConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,13 +26,17 @@ import java.util.regex.Pattern;
  * outranks <code>v0.1.0-beta.3</code>. Nothing here trusts the order GitHub lists in: a release edited long
  * after it was made would otherwise look new. Should the API be out of reach (a shared address past its
  * unauthenticated limit), the redirect <code>releases/latest</code> answers with — GitHub's own latest plain
- * release — stands in for either channel. An asset is downloaded from the fixed
- * <code>releases/download/&lt;tag&gt;/&lt;name&gt;</code> URL.
+ * release — stands in: for either channel when there is one; when there is none, the Release channel is told
+ * so, while the Beta channel, which cannot tell a beta from nothing this way, is told GitHub is out of reach.
+ * An asset is downloaded from the fixed <code>releases/download/&lt;tag&gt;/&lt;name&gt;</code> URL.
  */
 final class GitHubRelease {
     private GitHubRelease() {}
 
     private static final Duration CONNECT = Duration.ofSeconds(10);
+    /** How long a download may go without a byte before it is given up: the body has no timeout of its own, and
+     *  a stalled one would otherwise hold the launcher in "Downloading..." for good. */
+    private static final Duration STALL = Duration.ofSeconds(60);
     private static final Pattern TAG = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]*)\"");
     private static final Pattern PRERELEASE = Pattern.compile("\"prerelease\"\\s*:\\s*(true|false)");
     private static final Pattern DRAFT = Pattern.compile("\"draft\"\\s*:\\s*(true|false)");
@@ -40,34 +46,57 @@ final class GitHubRelease {
     record Release(String tag, boolean prerelease) {}
 
     /** GitHub answered, and the channel has nothing: not a network failure, and nothing to retry — the
-     *  dropdown is the way out. */
+     *  dropdown is the way out when the other channel has something, which {@link #beta} names. Nothing here
+     *  says anything about what is installed: that is the player's disk, not GitHub's answer. */
     static final class NoReleaseException extends IOException {
         private static final long serialVersionUID = 1L;
-        NoReleaseException(String message) {
+        /** The tag the Beta channel would install while the Release channel has nothing, or null: there is no
+         *  beta either, or the answer came off the fallback, which cannot see one. */
+        final String beta;
+
+        NoReleaseException(String message, String beta) {
             super(message);
+            this.beta = beta;
         }
     }
 
     /** The tag the channel should have installed: the highest version the channel admits, or GitHub's own
-     *  latest plain release when the API cannot be asked. */
+     *  latest plain release when the API cannot be asked. Without one, the Release channel has nothing to install
+     *  and hears so; the Beta channel might have a beta the redirect cannot show, so it hears the API is out of
+     *  reach — the installed client is offered, or a retry. */
     static String newestTag(String repo, Channel channel) throws IOException, InterruptedException {
         List<Release> all;
         try {
             all = releases(repo);
-        } catch(IOException e) {
-            return latestTag(repo);
+        } catch(IOException api) {
+            try {
+                return latestTag(repo);
+            } catch(NoReleaseException none) {
+                if(channel == Channel.BETA)
+                    throw new IOException("the releases API is out of reach, and no release stands in for a beta", api);
+                throw none;
+            }
         }
-        Release best = null;
+        return newest(all, channel, repo);
+    }
+
+    /** The channel's pick among the releases listed: the highest version it admits. With none, the exception
+     *  names the highest of everything, which is then a beta the Release channel skipped — or nothing at all. */
+    static String newest(List<Release> all, Channel channel, String repo) throws NoReleaseException {
+        Release best = null, any = null;
         for(Release r : all) {
-            if(r.prerelease() && (channel != Channel.BETA))
-                continue;
             if(!VERSION.matcher(r.tag()).matches())
+                continue;
+            if((any == null) || (compare(r.tag(), any.tag()) > 0))
+                any = r;
+            if(r.prerelease() && (channel != Channel.BETA))
                 continue;
             if((best == null) || (compare(r.tag(), best.tag()) > 0))
                 best = r;
         }
         if(best == null)
-            throw new NoReleaseException("no " + channel.label.toLowerCase() + " published at github.com/" + repo);
+            throw new NoReleaseException("no " + channel.label.toLowerCase() + " published at github.com/" + repo
+                                         + ((any == null) ? "" : " (" + any.tag() + " is a beta)"), (any == null) ? null : any.tag());
         return best.tag();
     }
 
@@ -137,18 +166,22 @@ final class GitHubRelease {
     }
 
     /** GitHub's own latest plain release of <code>owner/repo</code>, off the redirect and with no API: the
-     *  fallback, and what a repository without the API in reach still answers. */
+     *  fallback, and what a repository without the API in reach still answers. A repository with no plain release
+     *  (none at all, or pre-releases only) has no latest: GitHub then sends the releases page itself instead of a
+     *  <code>releases/tag/</code> one — a redirect to it today, the page outright once — and that is
+     *  {@link NoReleaseException}, not a failure. */
     static String latestTag(String repo) throws IOException, InterruptedException {
         HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).connectTimeout(CONNECT).build();
         HttpRequest req = HttpRequest.newBuilder(URI.create("https://github.com/" + repo + "/releases/latest"))
             .timeout(Duration.ofSeconds(20)).GET().build();
         HttpResponse<Void> res = http.send(req, HttpResponse.BodyHandlers.discarding());
         String location = res.headers().firstValue("location").orElse(null);
-        if(res.statusCode() == 200)
-            throw new NoReleaseException("no release published at github.com/" + repo);   // the releases page itself, no redirect
-        if((res.statusCode() / 100 != 3) || (location == null) || !location.contains("/releases/tag/"))
-            throw new IOException("unexpected answer from github.com/" + repo + " (HTTP " + res.statusCode() + ")");
-        return location.substring(location.lastIndexOf('/') + 1);
+        boolean redirect = (res.statusCode() / 100 == 3) && (location != null);
+        if(redirect && location.contains("/releases/tag/"))
+            return location.substring(location.lastIndexOf('/') + 1);
+        if((res.statusCode() == 200) || (redirect && location.matches(".*/releases/?")))
+            throw new NoReleaseException("no release published at github.com/" + repo, null);
+        throw new IOException("unexpected answer from github.com/" + repo + " (HTTP " + res.statusCode() + ")");
     }
 
     /** The zip a release carries: <code>&lt;prefix&gt;&lt;version&gt;.zip</code>, the version being the tag
@@ -158,10 +191,13 @@ final class GitHubRelease {
         return "https://github.com/" + repo + "/releases/download/" + tag + "/" + prefix + version + ".zip";
     }
 
-    /** Download <code>url</code> to <code>to</code>, reporting the fraction done (or -1 while the size is unknown). */
+    /** Download <code>url</code> to <code>to</code>, reporting the fraction done (or -1 while the size is unknown).
+     *  The request's timeout covers the headers alone; the body is read as it comes, with a watchdog that gives
+     *  the download up after {@link #STALL} without a byte, an ordinary failure to the caller. */
+    @SuppressWarnings("try")   // the watchdog closes the stream on purpose, from its own thread
     static void download(String url, Path to, DoubleConsumer progress) throws IOException, InterruptedException {
         HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT).build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(30)).GET().build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(STALL).GET().build();
         HttpResponse<InputStream> res = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
         if(res.statusCode() != 200) {
             res.body().close();
@@ -169,15 +205,44 @@ final class GitHubRelease {
         }
         long total = res.headers().firstValueAsLong("content-length").orElse(-1);
         Path part = to.resolveSibling(to.getFileName() + ".part");
+        AtomicLong done = new AtomicLong();
+        AtomicBoolean stalled = new AtomicBoolean();
         try(InputStream in = res.body(); OutputStream out = Files.newOutputStream(part)) {
-            byte[] buf = new byte[1 << 16];
-            long done = 0;
-            int n;
-            while((n = in.read(buf)) > 0) {
-                out.write(buf, 0, n);
-                done += n;
-                progress.accept((total > 0) ? (double)done / total : -1);
+            // Every STALL, the watchdog looks at the count; unchanged, it closes the stream, which fails the read
+            // below at once. It is interrupted when the read is done, and a daemon, so it holds nothing up.
+            Thread watchdog = new Thread(() -> {
+                try {
+                    long seen = -1;
+                    while(done.get() != seen) {
+                        seen = done.get();
+                        Thread.sleep(STALL.toMillis());
+                    }
+                    stalled.set(true);
+                    in.close();
+                } catch(InterruptedException | IOException e) {
+                    // the download is over, or the stream would not close: nothing left to watch
+                }
+            }, "download-watchdog");
+            watchdog.setDaemon(true);
+            watchdog.start();
+            try {
+                byte[] buf = new byte[1 << 16];
+                int n;
+                while((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    long d = done.addAndGet(n);
+                    progress.accept((total > 0) ? (double)d / total : -1);
+                }
+            } finally {
+                watchdog.interrupt();
             }
+        } catch(IOException e) {
+            try {
+                Files.deleteIfExists(part);     // of no use without a resume; what a closed window leaves, tidy() takes
+            } catch(IOException held) {
+                // the next download truncates it
+            }
+            throw stalled.get() ? new IOException("no data for " + STALL.toSeconds() + " seconds", e) : e;
         }
         Files.move(part, to, StandardCopyOption.REPLACE_EXISTING);
         progress.accept(1);

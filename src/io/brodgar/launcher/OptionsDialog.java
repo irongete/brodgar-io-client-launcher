@@ -38,18 +38,22 @@ import javax.swing.event.DocumentListener;
 final class OptionsDialog {
     private OptionsDialog() {}
 
-    /** The bar's ends: 2 GB, and half of what the machine has, never past 16 GB. */
-    static final int MIN_GB = 2, CAP_GB = 16;
+    /** The bar's ends: 1 GB, and half of what the machine has — never past 16 GB, and never under 2, so that a
+     *  small machine still gets a bar rather than a single value. */
+    static final int MIN_GB = 1, CAP_GB = 16;
 
-    /** Open the dialog over <code>owner</code>, modal; back when it is closed. */
+    /** Open the dialog over <code>owner</code>, modal; back when it is closed. <code>java</code> is the executable
+     *  the preview's command starts with: the one Play would use. */
     static void show(JFrame owner, Settings settings, Path java) {
         JDialog d = new JDialog(owner, "Options", true);
 
         long totalGb = totalMemoryGb();
-        int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB, Math.min(CAP_GB, totalGb / 2));
+        int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB + 1, Math.min(CAP_GB, totalGb / 2));
         JSlider heap = new JSlider(MIN_GB, maxGb, Math.max(MIN_GB, Math.min(maxGb, heapGb(settings.heap()))));
-        heap.setMajorTickSpacing((maxGb - MIN_GB > 8) ? 2 : 1);
+        int step = (maxGb - MIN_GB > 8) ? 2 : 1;             // one label per GB up to 9 of them, else every other
+        heap.setMajorTickSpacing(step);
         heap.setMinorTickSpacing(1);
+        heap.setLabelTable(heap.createStandardLabels(step, (step == 1) ? MIN_GB : 2));   // even numbers when every other
         heap.setPaintTicks(true);
         heap.setPaintLabels(true);
         heap.setSnapToTicks(true);

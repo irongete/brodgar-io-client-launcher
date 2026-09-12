@@ -1,7 +1,9 @@
 package io.brodgar.launcher;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -11,7 +13,7 @@ import java.util.Properties;
 
 /**
  * <code>launcher.properties</code>: written with its defaults the first time, read every time. What the window
- * changes — the channel dropdown, the proxy checkbox, the Options dialog — is written back in place, one
+ * changes — the channel dropdown, the two checkboxes, the Options dialog — is written back in place, one
  * <code>key=value</code> line each, the rest of the file left as the player has it.
  */
 public final class Settings {
@@ -44,6 +46,11 @@ public final class Settings {
         # everything. The launcher's dropdown, remembered here.
         channel=beta
 
+        # true: start the game in a command window (java.exe) that shows what it prints and stays open when
+        # the game ends in an error -- the way to see what went wrong; false: no window, and what the game
+        # printed is in client.log. The launcher's checkbox, remembered here.
+        console=false
+
         # Read the game's resources through the brodgar.io cache proxy instead of the game's own server:
         # the launcher's checkbox, remembered here, and the proxy's address.
         resource.proxy=false
@@ -64,13 +71,18 @@ public final class Settings {
         this.file = file;
     }
 
-    static Settings load(Path file) {
+    /** The settings in <code>file</code>, which is first written with the defaults when there is none — unless
+     *  <code>create</code> is off, as it is for a check run, which touches nothing: the defaults then simply
+     *  stand. The file is UTF-8, as it is written. */
+    static Settings load(Path file, boolean create) {
         Settings s = new Settings(file);
         try {
-            if(!Files.exists(file))
+            if(create && !Files.exists(file))
                 Files.writeString(file, DEFAULTS);
-            try(InputStream in = Files.newInputStream(file)) {
-                s.p.load(in);
+            if(Files.exists(file)) {
+                try(Reader in = new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8)) {
+                    s.p.load(in);
+                }
             }
         } catch(IOException e) {
             // unreadable or unwritable: the defaults below stand
@@ -92,6 +104,7 @@ public final class Settings {
     String repo()             {return get("repo", "irongete/brodgar-io-client");}
     String assetPrefix()      {return get("asset.prefix", "brodgar-io-client-");}
     Channel channel()         {return Channel.of(get("channel", "beta"), Channel.BETA);}
+    boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
     String resourceProxyUrl() {return get("resource.proxy.url", "http://brodgar.io/res/");}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
@@ -110,9 +123,14 @@ public final class Settings {
         return v.isEmpty() ? List.of() : Arrays.asList(v.split("\\s+"));
     }
 
-    /** The checkbox: remembered at once, so the next run starts where this one left it. */
+    /** The proxy checkbox: remembered at once, so the next run starts where this one left it. */
     void resourceProxy(boolean on) {
         set("resource.proxy", String.valueOf(on));
+    }
+
+    /** The console checkbox, remembered the same way. */
+    void console(boolean on) {
+        set("console", String.valueOf(on));
     }
 
     /** The dropdown, remembered the same way. */
@@ -127,22 +145,25 @@ public final class Settings {
     }
 
     /** Set <code>key=value</code> on its own line — replacing the line that holds it, or appended — and leave
-     *  every other line, comments included, as it is. A file that cannot be written keeps the value for this
-     *  run alone. */
+     *  every other line, comments included, as it is. The value is written the way {@link Properties#load} reads
+     *  it back: a backslash is an escape to it, so each one is doubled (a Windows path in the Java options would
+     *  otherwise lose its separators on the next run); nothing else in a one-line value is special. A file that
+     *  cannot be written keeps the value for this run alone. */
     private void write(String key, String value) {
         try {
             List<String> lines = Files.exists(file) ? new ArrayList<>(Files.readAllLines(file)) : new ArrayList<>();
+            String line = key + "=" + value.replace("\\", "\\\\");
             boolean done = false;
             for(int i = 0; i < lines.size(); i++) {
                 String t = lines.get(i).stripLeading();
                 if(t.startsWith(key + "=") || t.startsWith(key + " ") || t.startsWith(key + ":")) {
-                    lines.set(i, key + "=" + value);
+                    lines.set(i, line);
                     done = true;
                     break;
                 }
             }
             if(!done)
-                lines.add(key + "=" + value);
+                lines.add(line);
             Files.write(file, lines);
         } catch(IOException e) {
             // the setting stands for this run

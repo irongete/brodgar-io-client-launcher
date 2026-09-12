@@ -31,9 +31,11 @@ import java.util.concurrent.TimeUnit;
  * <b>Play</b> when the channel's newest release is installed — greyed out while the channel has nothing,
  * <b>Retry</b> when nothing is installed and the download failed. The dropdown is the channel — <b>Release</b>
  * installs plain releases, <b>Beta</b> the newest of everything, pre-releases included — and picking one looks
- * again at once. The checkbox is the brodgar.io resource cache proxy: off, the client reads the game's own
- * resource server (what its shipped haven-config.properties names); on, it is started with <code>-U</code>
- * and the proxy's URL. Options opens the {@link OptionsDialog}. Everything is remembered in
+ * again at once. One checkbox is the console: off, the client starts without a window of its own and what it
+ * prints goes to <code>client.log</code>; on, it runs in a command window that shows what it prints and stays
+ * open when it ends in an error. The other is the brodgar.io resource cache proxy: off, the client reads the
+ * game's own resource server (what its shipped haven-config.properties names); on, it is started with
+ * <code>-U</code> and the proxy's URL. Options opens the {@link OptionsDialog}. Everything is remembered in
  * <code>launcher.properties</code>. Run with <code>--check</code> it resolves the channel's newest release and
  * prints what it would download and how it would start the client, and exits without touching anything or
  * opening a window.
@@ -42,31 +44,30 @@ public final class Launcher {
     private final Path home;
     private final Settings settings;
     private final ClientInstall client;
-    private final Path java;
+    private final Path javaw;
     private final Ui ui;
 
-    private Launcher(Path home, Settings settings, ClientInstall client, Path java, Ui ui) {
+    private Launcher(Path home, Settings settings, ClientInstall client, Path javaw, Ui ui) {
         this.home = home;
         this.settings = settings;
         this.client = client;
-        this.java = java;
+        this.javaw = javaw;
         this.ui = ui;
     }
 
     public static void main(String[] args) {
         boolean check = Arrays.asList(args).contains("--check");
         Path home = home();
-        Settings settings = Settings.load(home.resolve("launcher.properties"));
+        Settings settings = Settings.load(home.resolve("launcher.properties"), !check);
         ClientInstall client = new ClientInstall(home.resolve("client"));
-        Path java = javaw(home);
+        Path javaw = javaw(home);
         if(check) {
-            check(home, settings, client, java);
+            check(home, settings, client, javaw);
             return;
         }
         Launcher[] l = new Launcher[1];
-        Ui ui = Ui.open(title(client.installedVersion()), settings.channel(), c -> l[0].channel(c),
-                        settings.resourceProxy(), settings::resourceProxy, () -> l[0].options());
-        l[0] = new Launcher(home, settings, client, java, ui);
+        Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), () -> l[0].options());
+        l[0] = new Launcher(home, settings, client, javaw, ui);
         new Thread(l[0]::prepare, "launcher-update").start();
     }
 
@@ -89,12 +90,14 @@ public final class Launcher {
         new Thread(this::prepare, "launcher-update").start();
     }
 
-    /** The Options button, on the event thread: modal, so nothing else happens while it is open. */
+    /** The Options button, on the event thread: modal, so nothing else happens while it is open. The preview
+     *  starts with the executable Play would use, java.exe while the console checkbox is on. */
     private void options() {
-        OptionsDialog.show(ui.frame(), settings, java);
+        OptionsDialog.show(ui.frame(), settings, exe(javaw, settings));
     }
 
-    /** Bring the client up to date, then offer what there is. */
+    /** Bring the client up to date, then offer what there is. The title names the client only while Play offers
+     *  it: what sits in <code>client/</code> without a channel behind it is not the launcher's to announce. */
     private void prepare() {
         ui.busy();
         Outcome o;
@@ -104,6 +107,7 @@ public final class Launcher {
             ui.status("Unexpected: " + e);
             o = client.isInstalled() ? Outcome.INSTALLED_ANYWAY : Outcome.NOTHING;
         }
+        ui.title(title((o == Outcome.READY || o == Outcome.INSTALLED_ANYWAY) ? client.installedVersion() : null));
         switch(o) {
             case READY, INSTALLED_ANYWAY -> ui.ready("Play", this::play);
             case NO_RELEASE -> ui.idle();
@@ -114,6 +118,7 @@ public final class Launcher {
     /** Fetch the channel's newest release when it differs from the installed one, saying in the status line
      *  what happened. */
     private Outcome update() {
+        client.tidy();
         String installed = client.installedVersion();
         if(!settings.checkUpdates()) {
             ui.status((installed == null) ? "Update check is off (Options) and no client is installed."
@@ -127,7 +132,12 @@ public final class Launcher {
             ui.status("Looking for the newest " + kind + "...");
             latest = GitHubRelease.newestTag(settings.repo(), channel);
         } catch(GitHubRelease.NoReleaseException e) {
-            ui.status("No " + kind + " has been published yet" + ((installed == null) ? "." : " — pick another channel to play " + installed + "."));
+            // Only what GitHub answered: the Beta channel is everything, so nothing there is nothing at all; the
+            // Release channel may have skipped a beta, named when the API showed it. Nothing about what is
+            // installed, which no channel is known to have.
+            ui.status((channel == Channel.BETA) ? "Nothing has been published yet."
+                      : (e.beta == null) ? "No release has been published yet."
+                      : "No release has been published yet — " + e.beta + " is on the Beta channel.");
             return Outcome.NO_RELEASE;
         } catch(Exception e) {
             ui.status((installed == null) ? "GitHub is unreachable: " + e.getMessage()
@@ -142,12 +152,11 @@ public final class Launcher {
             String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix());
             ui.status((installed == null) ? "Downloading client " + latest + " (" + kind + ")..." : "Installing " + latest + " (" + kind + ") over " + installed + "...");
             Files.createDirectories(client.dir());
-            Path zip = client.dir().resolve("download.tmp");
+            Path zip = client.download();
             GitHubRelease.download(url, zip, ui::progress);
             ui.status("Installing client " + latest + "...");
             client.install(zip, latest);
             Files.deleteIfExists(zip);
-            ui.title(title(latest));
             ui.status("Client " + latest + " is ready.");
             return Outcome.READY;
         } catch(Exception e) {
@@ -157,7 +166,9 @@ public final class Launcher {
         }
     }
 
-    /** The Play button: start the client and leave, unless it dies at once, in which case say so and stay. */
+    /** The Play button: start the client and leave, unless it dies at once, in which case say so and stay. With
+     *  the console on, a client that dies at once has its window kept open by the pause, so the process here
+     *  lives on and the launcher leaves as usual: the error is on that screen. */
     private void play() {
         ui.busy();
         ui.status("Starting the client...");
@@ -178,17 +189,67 @@ public final class Launcher {
         }
     }
 
+    /** The client as a process: on javaw.exe with its output in <code>client.log</code>, or, with the console
+     *  checkbox on, in a command window of its own — the log then says so, and takes what cmd itself may have
+     *  to say (nothing, unless the window could not be opened). */
     private Process start() throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(command(java, settings))
-            .directory(client.dir().toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(home.resolve("client.log").toFile());
+        Path log = home.resolve("client.log");
+        ProcessBuilder pb = new ProcessBuilder().directory(client.dir().toFile()).redirectErrorStream(true);
+        if(settings.console()) {
+            Files.writeString(log, "The client was started with a console window: what it printed is there." + System.lineSeparator());
+            pb.command(consoleCommand(javaw, settings, client.dir())).redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()));
+        } else {
+            pb.command(command(javaw, settings)).redirectOutput(log.toFile());
+        }
         return pb.start();
     }
 
-    /** The client's command line as the settings stand. */
-    static List<String> command(Path java, Settings s) {
-        return command(java, s.launch());
+    /** The client's command line as the settings stand, on the executable Play would use. */
+    static List<String> command(Path javaw, Settings s) {
+        return command(exe(javaw, s), s.launch());
+    }
+
+    /**
+     * The client's command line in a command window of its own, for the console checkbox. cmd's
+     * <code>start</code> opens the window (titled, waited for, in <code>dir</code>) and runs a second cmd in it,
+     * which runs the client on <code>java.exe</code> — the launcher that writes to a console, where javaw.exe
+     * has none — and pauses when it ends in an error, so what went wrong stays on screen. The outer cmd waits
+     * for the window, so the process returned stands for the client's just as the silent one does.
+     *
+     * <p>Two things keep cmd from misreading the line. The client's <code>||</code> is written <code>^|^|</code>
+     * so the outer cmd passes it on rather than acting on it. And java.exe is named by a path relative to
+     * <code>dir</code> when it can be (<code>..\runtime\bin\java.exe</code>, always in the shipped folder), so
+     * that nothing after <code>cmd /c</code> needs quoting: a quoted path with a space and a parenthesis, as in
+     * <code>Brodgar (2)</code>, would lose its quotes to cmd's quote-stripping rule. Only a Java elsewhere
+     * (development, a JDK on another drive) is written whole, quoted when it has a space.
+     */
+    static List<String> consoleCommand(Path javaw, Settings s, Path dir) {
+        Path java = consoleJava(javaw);
+        String exe;
+        try {
+            exe = dir.toAbsolutePath().relativize(java.toAbsolutePath()).toString();
+        } catch(IllegalArgumentException e) {
+            exe = java.toString();                                  // another drive: no relative path to it
+        }
+        if(exe.indexOf(' ') >= 0)
+            exe = "\"" + exe + "\"";
+        List<String> client = command(java, s.launch());
+        List<String> cmd = new ArrayList<>(List.of("cmd.exe", "/c", "start", "\"Brodgar.io client\"", "/wait", "/D", "\"" + dir + "\"", "cmd.exe", "/c", exe));
+        cmd.addAll(client.subList(1, client.size()));           // the same command, java.exe named as above
+        cmd.addAll(List.of("^|^|", "pause"));
+        return cmd;
+    }
+
+    /** The executable the settings start the client with: java.exe while the console checkbox is on, else javaw. */
+    static Path exe(Path javaw, Settings s) {
+        return s.console() ? consoleJava(javaw) : javaw;
+    }
+
+    /** The console launcher beside a javaw: <code>java.exe</code> in the same <code>bin</code>, or javaw itself
+     *  when there is none. */
+    static Path consoleJava(Path javaw) {
+        Path java = javaw.resolveSibling("java.exe");
+        return Files.exists(java) ? java : javaw;
     }
 
     /**
@@ -230,9 +291,9 @@ public final class Launcher {
         return cmd;
     }
 
-    private static void check(Path home, Settings settings, ClientInstall client, Path java) {
+    private static void check(Path home, Settings settings, ClientInstall client, Path javaw) {
         System.out.println("home:      " + home);
-        System.out.println("runtime:   " + java + (Files.exists(java) ? "" : "  (MISSING)"));
+        System.out.println("runtime:   " + javaw + (Files.exists(javaw) ? "" : "  (MISSING)"));
         System.out.println("installed: " + client.installedVersion());
         System.out.println("channel:   " + settings.channel().key);
         try {
@@ -245,7 +306,10 @@ public final class Launcher {
             System.out.println("newest:    unreachable: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off (the game's own resource server)"));
-        System.out.println("command:   " + String.join(" ", command(java, settings)));
+        System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
+        System.out.println("command:   " + String.join(" ", command(javaw, settings)));
+        if(settings.console())
+            System.out.println("window:    " + String.join(" ", consoleCommand(javaw, settings, client.dir())));
         System.out.println("cwd:       " + client.dir());
     }
 
@@ -278,10 +342,11 @@ public final class Launcher {
         return Files.exists(own) ? own : Paths.get(System.getProperty("java.home"), "bin", "java");
     }
 
-    /** The window title: the launcher's version from the jar's manifest, and the installed client's. */
-    private static String title(String installed) {
+    /** The window title: the launcher's version from the jar's manifest, and the client's when one is offered
+     *  (<code>null</code> while none is). */
+    private static String title(String offered) {
         String v = Launcher.class.getPackage().getImplementationVersion();
-        return "Brodgar.io" + ((v == null) ? "" : " launcher " + v) + ((installed == null) ? "" : " · client " + installed);
+        return "Brodgar.io" + ((v == null) ? "" : " launcher " + v) + ((offered == null) ? "" : " · client " + offered);
     }
 
     private static String tail(Path log, int lines) {

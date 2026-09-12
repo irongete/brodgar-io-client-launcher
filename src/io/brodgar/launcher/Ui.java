@@ -21,23 +21,25 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * The launcher's one window, a grid of three rows: the status line and the progress bar with the big button
+ * The launcher's one window, a grid of four rows: the status line and the progress bar with the big button
  * beside them — <b>Play</b> once the channel's newest release is installed, <b>Retry</b> when nothing is
- * installed and the download failed, greyed out while the channel has nothing — and under them the
- * resource-proxy checkbox, the channel dropdown and <b>Options...</b>, in the button's column. Every method
- * may be called from any thread; the big button's action runs off the event thread, so it may block. The
- * dropdown is held while work is going on, since changing the channel starts work of its own.
+ * installed and the download failed, greyed out while the channel has nothing — then the console checkbox, and
+ * under it the resource-proxy checkbox, the channel dropdown and <b>Options...</b>, in the button's column. The
+ * two checkboxes are settings, remembered the moment they are ticked. Every method may be called from any
+ * thread; the big button's action runs off the event thread, so it may block. The dropdown is held while work
+ * is going on, since changing the channel starts work of its own.
  */
 final class Ui {
     private final JFrame frame;
     private final JLabel status;
     private final JProgressBar bar;
     private final JButton button;
+    private final JCheckBox console;
     private final JCheckBox proxy;
     private final JComboBox<Channel> channel;
     private Runnable action;
 
-    private Ui(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy, Runnable onOptions) {
+    private Ui(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
@@ -58,10 +60,13 @@ final class Ui {
         });
         JButton options = new JButton("Options...");
         options.addActionListener(ev -> onOptions.run());
-        proxy = new JCheckBox("Use brodgar.io resource cache proxy", proxyOn);
-        proxy.addActionListener(ev -> onProxy.accept(proxy.isSelected()));
+        console = new JCheckBox("Start the client with a console window", settings.console());
+        console.setToolTipText("The client runs in a command window that shows what it prints and stays open when it ends in an error");
+        console.addActionListener(ev -> settings.console(console.isSelected()));
+        proxy = new JCheckBox("Use brodgar.io resource cache proxy", settings.resourceProxy());
+        proxy.addActionListener(ev -> settings.resourceProxy(proxy.isSelected()));
         channel = new JComboBox<>(Channel.values());
-        channel.setSelectedItem(ch);
+        channel.setSelectedItem(settings.channel());
         channel.setRenderer(new javax.swing.DefaultListCellRenderer() {
             @Override public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean selected, boolean focus) {
                 return super.getListCellRendererComponent(list, (value instanceof Channel c) ? c.label : value, index, selected, focus);
@@ -89,9 +94,12 @@ final class Ui {
         c.gridx = 2; c.gridy = 0; c.gridwidth = 1; c.gridheight = 2; c.weightx = 0;
         c.fill = GridBagConstraints.BOTH; c.insets = new Insets(0, 16, 8, 0);
         panel.add(button, c);
-        // row 2: the checkbox, the channel, and Options in the button's column
+        // row 2: the console checkbox, over both left columns
         c.gridheight = 1; c.insets = new Insets(0, 0, 0, 0);
-        c.gridx = 0; c.gridy = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        c.gridx = 0; c.gridy = 2; c.gridwidth = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(console, c);
+        // row 3: the proxy checkbox, the channel, and Options in the button's column
+        c.gridy = 3; c.gridwidth = 1;
         panel.add(proxy, c);
         JPanel pick = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 0));
         pick.add(new JLabel("Channel:"));
@@ -110,13 +118,13 @@ final class Ui {
         frame.setVisible(true);
     }
 
-    /** Open the window; <code>ch</code> and <code>proxyOn</code> are the dropdown's and the checkbox's first
-     *  states, <code>onChannel</code> and <code>onProxy</code> hear every change and <code>onOptions</code> the
-     *  Options button, all on the event thread. */
-    static Ui open(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy, Runnable onOptions) {
+    /** Open the window. The dropdown and the checkboxes start as <code>settings</code> has them, and the checkboxes
+     *  write themselves back into it; <code>onChannel</code> hears every change of the dropdown and
+     *  <code>onOptions</code> the Options button, both on the event thread. */
+    static Ui open(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions) {
         Ui[] out = new Ui[1];
         try {
-            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, ch, onChannel, proxyOn, onProxy, onOptions));
+            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, settings, onChannel, onOptions));
         } catch(InterruptedException | InvocationTargetException e) {
             throw new IllegalStateException(e);
         }
