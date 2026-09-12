@@ -108,17 +108,17 @@ Every step runs on it — `javac`, `jlink`, the development runs. Without that l
 | `ant check` | the launcher's `--check`, its folder being this one |
 | `ant run` | the launcher in this folder (`client/` and `launcher.properties` appear here; ignored by git) |
 
-`-Dversion=0.1.0` names the launcher's version (`0.1.0` by default). Nothing built is committed: the
+`-Dversion=1.0.0` names the launcher's version (`1.0.0` by default). Nothing built is committed: the
 runtime is a product of the JDK on the build machine, and the release asset is where it travels.
 
 ## Release
 
 ```powershell
-.\release.ps1 0.1.0 -Notes notes.md
+.\release.ps1 1.0.0 -Notes etc\notes-1.0.0.md
 ```
 
-Refuses a dirty tree or an existing tag, builds from scratch, runs `ant -Dversion=0.1.0 release`, tags HEAD
-as `v0.1.0`, pushes the branch and the tag, and creates the GitHub release with the zip as its asset. The
+Refuses a dirty tree or an existing tag, builds from scratch, runs `ant -Dversion=1.0.0 release`, tags HEAD
+as `v1.0.0`, pushes the branch and the tag, and creates the GitHub release with the zip as its asset. The
 notes come from the file, from `-Message "..."`, or from the commit subjects since the previous `v*` tag.
 A version with a suffix is published as a pre-release, a plain one as a release (`-Channel` overrides);
 `-NoPublish` stops after the tag; `-Draft` is passed on to GitHub.

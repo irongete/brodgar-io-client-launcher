@@ -14,7 +14,7 @@
 <project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
-  <property name="version" value="0.1.0" />
+  <property name="version" value="1.0.0" />
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS

@@ -5,9 +5,9 @@
 .DESCRIPTION
   One command does the whole release:
 
-    .\release.ps1 0.1.0 -Notes notes.md              a plain GitHub release, notes from a markdown file
-    .\release.ps1 0.1.0-beta.1 -Message "First cut"  a suffix makes a GitHub pre-release, notes inline
-    .\release.ps1 0.1.1                              release notes = the commit subjects since the last v* tag
+    .\release.ps1 1.0.0 -Notes etc\notes-1.0.0.md    a plain GitHub release, notes from a markdown file
+    .\release.ps1 1.1.0-beta.1 -Message "First cut"  a suffix makes a GitHub pre-release, notes inline
+    .\release.ps1 1.0.1                              release notes = the commit subjects since the last v* tag
 
   It refuses to run on a dirty tree or an existing tag, compiles from scratch, runs
   `ant -Dversion=<version> release` -- launcher.jar, run.bat, the jlink runtime cut from the JDK ant runs
