@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -18,9 +19,11 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * The launcher's one window: a status line, a progress bar, the resource-proxy checkbox and one button —
- * <b>Play</b> once the client is ready, <b>Retry</b> when nothing is installed and the download failed. Every
- * method may be called from any thread; the button's action runs off the event thread, so it may block.
+ * The launcher's one window: a status line, a progress bar, the channel dropdown, the resource-proxy checkbox
+ * and one button — <b>Play</b> once the client is ready, <b>Retry</b> when nothing is installed and the
+ * download failed. Every method may be called from any thread; the button's action runs off the event
+ * thread, so it may block. The dropdown is held while work is going on, since changing the channel starts
+ * work of its own.
  */
 final class Ui {
     private final JFrame frame;
@@ -28,9 +31,10 @@ final class Ui {
     private final JProgressBar bar;
     private final JButton button;
     private final JCheckBox proxy;
+    private final JComboBox<Channel> channel;
     private Runnable action;
 
-    private Ui(String title, boolean proxyOn, Consumer<Boolean> onProxy) {
+    private Ui(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
@@ -51,10 +55,29 @@ final class Ui {
         });
         proxy = new JCheckBox("Use brodgar.io resource cache proxy", proxyOn);
         proxy.addActionListener(ev -> onProxy.accept(proxy.isSelected()));
+        channel = new JComboBox<>(Channel.values());
+        channel.setSelectedItem(ch);
+        channel.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean selected, boolean focus) {
+                return super.getListCellRendererComponent(list, (value instanceof Channel c) ? c.label : value, index, selected, focus);
+            }
+        });
+        channel.setEnabled(false);
+        channel.addActionListener(ev -> {
+            Channel picked = (Channel)channel.getSelectedItem();
+            if(channel.isEnabled() && (picked != null))
+                onChannel.accept(picked);
+        });
+        JPanel options = new JPanel(new BorderLayout(16, 0));
+        options.add(proxy, BorderLayout.CENTER);
+        JPanel pick = new JPanel(new BorderLayout(6, 0));
+        pick.add(new JLabel("Channel:"), BorderLayout.WEST);
+        pick.add(channel, BorderLayout.CENTER);
+        options.add(pick, BorderLayout.EAST);
         JPanel middle = new JPanel(new BorderLayout(0, 8));
         middle.add(status, BorderLayout.NORTH);
         middle.add(bar, BorderLayout.CENTER);
-        middle.add(proxy, BorderLayout.SOUTH);
+        middle.add(options, BorderLayout.SOUTH);
         JPanel right = new JPanel(new BorderLayout());
         right.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
         right.add(button, BorderLayout.CENTER);
@@ -71,12 +94,12 @@ final class Ui {
         frame.setVisible(true);
     }
 
-    /** Open the window; <code>proxyOn</code> is the checkbox's first state and <code>onProxy</code> hears every
-     *  change, on the event thread. */
-    static Ui open(String title, boolean proxyOn, Consumer<Boolean> onProxy) {
+    /** Open the window; <code>ch</code> and <code>proxyOn</code> are the dropdown's and the checkbox's first
+     *  states, and <code>onChannel</code> and <code>onProxy</code> hear every change, on the event thread. */
+    static Ui open(String title, Channel ch, Consumer<Channel> onChannel, boolean proxyOn, Consumer<Boolean> onProxy) {
         Ui[] out = new Ui[1];
         try {
-            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, proxyOn, onProxy));
+            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, ch, onChannel, proxyOn, onProxy));
         } catch(InterruptedException | InvocationTargetException e) {
             throw new IllegalStateException(e);
         }
@@ -108,6 +131,7 @@ final class Ui {
             bar.setIndeterminate(false);
             button.setText(label);
             button.setEnabled(true);
+            channel.setEnabled(true);
             button.requestFocusInWindow();
         });
     }
@@ -115,7 +139,10 @@ final class Ui {
     /** Nothing to press while work is going on. */
     void busy() {
         action = null;
-        SwingUtilities.invokeLater(() -> button.setEnabled(false));
+        SwingUtilities.invokeLater(() -> {
+            button.setEnabled(false);
+            channel.setEnabled(false);
+        });
     }
 
     /** Show a message and wait for the click; the window stays. */

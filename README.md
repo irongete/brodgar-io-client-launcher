@@ -18,11 +18,13 @@ Brodgar/
 
 ## What it does
 
-The window opens at once — a status line, a progress bar, a checkbox and one button — and the work runs
-behind it:
+The window opens at once — a status line, a progress bar, the channel dropdown, a checkbox and one button —
+and the work runs behind it:
 
-1. It reads the tag last installed and asks GitHub for the latest release's tag: the redirect
-   `github.com/irongete/brodgar-io-client/releases/latest` answers with, so no API, no token, no rate limit.
+1. It reads the tag last installed and asks GitHub for the channel's newest release: the list the API
+   answers with (one call, no token), the highest version by semver order — `v0.1.0` above `v0.1.0-beta.3`,
+   whatever order GitHub lists them in. Should the API be out of reach, the redirect
+   `github.com/irongete/brodgar-io-client/releases/latest` answers with stands in.
 2. When they differ, it downloads `releases/download/<tag>/brodgar-io-client-<version>.zip` (the version is
    the tag without its `v`), the bar showing how far, and unpacks it **over** `client/`: what the zip
    carries is replaced, everything else stays — `savedata/`, and any addon the player dropped in.
@@ -31,13 +33,18 @@ behind it:
    cannot be reached, the installed client is still offered; when nothing is installed and the download
    failed, the button reads **Retry**.
 
+**Channel**, the dropdown: **Release** installs the highest plain release; **Beta** the highest of everything,
+pre-releases included — so a beta player gets a release too when that is the newest thing. The client's
+`release.ps1` publishes a version with a suffix (`0.1.0-beta.1`) as a pre-release and a plain one as a
+release. Picking a channel looks again at once, and the choice is remembered in `launcher.properties`;
+while the client is in beta the default is **Beta**.
+
 **Use brodgar.io resource cache proxy**, the checkbox: off, the client reads the game's resources from the
 game's own server, the one its `haven-config.properties` names; on, it is started with
-`-U http://brodgar.io/res/`, the cache proxy. The choice is remembered in `launcher.properties`.
+`-U http://brodgar.io/res/`, the cache proxy. The choice is remembered too.
 
-GitHub's `latest` skips a release marked **pre-release**, so a release the launcher should install is
-published as a plain release. The launcher speaks English only, and so does its runtime: it carries no
-locale data beyond the JDK's built-in English.
+The launcher speaks English only, and so does its runtime: it carries no locale data beyond the JDK's
+built-in English.
 
 ## Settings
 
@@ -48,6 +55,7 @@ locale data beyond the JDK's built-in English.
 | `heap` | `2g` | the client's heap, fixed and pre-touched |
 | `repo` | `irongete/brodgar-io-client` | where the client's releases are |
 | `asset.prefix` | `brodgar-io-client-` | what the release zip's name starts with |
+| `channel` | `beta` | the dropdown: `release` installs plain releases only, `beta` the newest of everything |
 | `resource.proxy` | `false` | the checkbox: read resources through the brodgar.io cache proxy (`-U`) |
 | `resource.proxy.url` | `http://brodgar.io/res/` | the proxy's URL |
 | `check.updates` | `true` | `false` never looks for a release and offers what is installed |
@@ -72,7 +80,7 @@ uses the JDK `ant` itself runs on, which then has to be a JDK 21 or later carryi
 | `ant runtime` | `build/runtime/`, jlink of the modules `hafen.jar` and its libraries need (by `jdeps`) |
 | `ant image` | `build/image/Brodgar/`, the folder above, by jpackage |
 | `ant release` | `build/Brodgar-launcher-<version>-windows.zip`, the release asset |
-| `ant check` | resolves the latest release and prints the command the launcher would run, touching nothing |
+| `ant check` | resolves the channel's newest release and prints the command the launcher would run, touching nothing |
 | `ant run` | the launcher in this folder (`client/` and `launcher.properties` appear here; ignored by git) |
 
 `-Dversion=0.1.0` names the launcher's version (`0.1.0` by default); jpackage takes its leading digits.
@@ -88,4 +96,5 @@ is where it travels.
 Refuses a dirty tree or an existing tag, builds from scratch, runs `ant -Dversion=0.1.0 release`, tags HEAD
 as `v0.1.0`, pushes the branch and the tag, and creates the GitHub release with the zip as its asset. The
 notes come from the file, from `-Message "..."`, or from the commit subjects since the previous `v*` tag.
-`-NoPublish` stops after the tag; `-Draft` and `-PreRelease` are passed on to GitHub.
+A version with a suffix is published as a pre-release, a plain one as a release (`-Channel` overrides);
+`-NoPublish` stops after the tag; `-Draft` is passed on to GitHub.

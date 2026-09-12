@@ -27,9 +27,11 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>The window opens at once; the release check and the download run behind it, and the button becomes
  * <b>Play</b> when the client is ready — or <b>Retry</b> when nothing is installed and the download failed.
- * The checkbox beside the bar is the brodgar.io resource cache proxy: off, the client reads the game's own
- * resource server (what its shipped haven-config.properties names); on, it is started with <code>-U</code>
- * and the proxy's URL, and the choice is remembered in <code>launcher.properties</code>.
+ * The dropdown is the channel — <b>Release</b> installs plain releases, <b>Beta</b> the newest of everything,
+ * pre-releases included — and picking one looks again at once. The checkbox is the brodgar.io resource cache
+ * proxy: off, the client reads the game's own resource server (what its shipped haven-config.properties
+ * names); on, it is started with <code>-U</code> and the proxy's URL. Both are remembered in
+ * <code>launcher.properties</code>.
  * Run with <code>--check</code> it resolves the latest release and prints what it would download and how it
  * would start the client, and exits without touching anything or opening a window.
  */
@@ -58,9 +60,18 @@ public final class Launcher {
             check(home, settings, client, java);
             return;
         }
-        Ui ui = Ui.open(title(client.installedVersion()), settings.resourceProxy(), settings::resourceProxy);
-        Launcher l = new Launcher(home, settings, client, java, ui);
-        new Thread(l::prepare, "launcher-update").start();
+        Launcher[] l = new Launcher[1];
+        Ui ui = Ui.open(title(client.installedVersion()), settings.channel(), c -> l[0].channel(c),
+                        settings.resourceProxy(), settings::resourceProxy);
+        l[0] = new Launcher(home, settings, client, java, ui);
+        new Thread(l[0]::prepare, "launcher-update").start();
+    }
+
+    /** The dropdown: remember the channel and look for its newest release at once. Only reachable while no
+     *  work is going on, since the window holds the dropdown until Play or Retry is offered. */
+    private void channel(Channel c) {
+        settings.channel(c);
+        new Thread(this::prepare, "launcher-update").start();
     }
 
     /** Bring the client up to date, then offer Play — or Retry, when there is nothing to play. */
@@ -86,22 +97,24 @@ public final class Launcher {
                                           : "Client " + installed + " — update check is off (launcher.properties).");
             return;
         }
+        Channel channel = settings.channel();
+        String kind = channel.label.toLowerCase();
         String latest;
         try {
-            ui.status("Looking for the latest release...");
-            latest = GitHubRelease.latestTag(settings.repo());
+            ui.status("Looking for the newest " + kind + "...");
+            latest = GitHubRelease.newestTag(settings.repo(), channel);
         } catch(Exception e) {
-            ui.status((installed == null) ? "GitHub is unreachable: " + e.getMessage()
-                                          : "GitHub is unreachable — client " + installed + " is installed.");
+            ui.status((installed == null) ? "No " + kind + " to install: " + e.getMessage()
+                                          : "No " + kind + " found (" + e.getMessage() + ") — client " + installed + " is installed.");
             return;
         }
         if(latest.equals(installed)) {
-            ui.status("Client " + installed + " is up to date.");
+            ui.status("Client " + installed + " is the newest " + kind + ".");
             return;
         }
         try {
             String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix());
-            ui.status((installed == null) ? "Downloading client " + latest + "..." : "Updating " + installed + " → " + latest + "...");
+            ui.status((installed == null) ? "Downloading client " + latest + " (" + kind + ")..." : "Installing " + latest + " (" + kind + ") over " + installed + "...");
             Files.createDirectories(client.dir());
             Path zip = client.dir().resolve("download.tmp");
             GitHubRelease.download(url, zip, ui::progress);
@@ -180,12 +193,13 @@ public final class Launcher {
         System.out.println("home:      " + home);
         System.out.println("runtime:   " + java + (Files.exists(java) ? "" : "  (MISSING)"));
         System.out.println("installed: " + client.installedVersion());
+        System.out.println("channel:   " + settings.channel().key);
         try {
-            String latest = GitHubRelease.latestTag(settings.repo());
-            System.out.println("latest:    " + latest);
+            String latest = GitHubRelease.newestTag(settings.repo(), settings.channel());
+            System.out.println("newest:    " + latest);
             System.out.println("asset:     " + GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix()));
         } catch(Exception e) {
-            System.out.println("latest:    unreachable: " + e);
+            System.out.println("newest:    none: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off (the game's own resource server)"));
         System.out.println("command:   " + String.join(" ", command(java, settings)));

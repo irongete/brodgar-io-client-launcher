@@ -10,9 +10,9 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * <code>launcher.properties</code>: written with its defaults the first time, read every time. The one
- * setting the window itself changes — the resource cache proxy checkbox — is written back in place, the rest
- * of the file left as the player has it.
+ * <code>launcher.properties</code>: written with its defaults the first time, read every time. The two
+ * settings the window itself changes — the channel dropdown and the resource cache proxy checkbox — are
+ * written back in place, the rest of the file left as the player has it.
  */
 public final class Settings {
     private static final String DEFAULTS = """
@@ -24,6 +24,10 @@ public final class Settings {
         # Where the client's releases are, as owner/repo on GitHub, and the name its zip starts with.
         repo=irongete/brodgar-io-client
         asset.prefix=brodgar-io-client-
+
+        # Which releases to install -- release: plain releases only; beta: pre-releases too, the newest of
+        # everything. The launcher's dropdown, remembered here.
+        channel=beta
 
         # Read the game's resources through the brodgar.io cache proxy instead of the game's own server:
         # the launcher's checkbox, remembered here.
@@ -66,6 +70,7 @@ public final class Settings {
     String heap()             {return get("heap", "2g");}
     String repo()             {return get("repo", "irongete/brodgar-io-client");}
     String assetPrefix()      {return get("asset.prefix", "brodgar-io-client-");}
+    Channel channel()         {return Channel.of(get("channel", "beta"), Channel.BETA);}
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
     String resourceProxyUrl() {return get("resource.proxy.url", "http://brodgar.io/res/");}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
@@ -79,6 +84,12 @@ public final class Settings {
     void resourceProxy(boolean on) {
         p.setProperty("resource.proxy", String.valueOf(on));
         write("resource.proxy", String.valueOf(on));
+    }
+
+    /** The dropdown, remembered the same way. */
+    void channel(Channel c) {
+        p.setProperty("channel", c.key);
+        write("channel", c.key);
     }
 
     /** Set <code>key=value</code> on its own line — replacing the line that holds it, or appended — and leave

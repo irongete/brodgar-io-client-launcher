@@ -5,8 +5,8 @@
 .DESCRIPTION
   One command does the whole release:
 
-    .\release.ps1 0.1.0 -Notes notes.md              release notes from a markdown file
-    .\release.ps1 0.1.0 -Message "First launcher"    release notes inline
+    .\release.ps1 0.1.0 -Notes notes.md              a plain GitHub release, notes from a markdown file
+    .\release.ps1 0.1.0-beta.1 -Message "First cut"  a suffix makes a GitHub pre-release, notes inline
     .\release.ps1 0.1.1                              release notes = the commit subjects since the last v* tag
 
   It refuses to run on a dirty tree or an existing tag, compiles from scratch, runs
@@ -14,7 +14,9 @@
   jdk.home in build.properties), the jpackage app image, and its zip -- tags HEAD as v<version>, pushes the
   branch and the tag, and creates the GitHub release with the zip as its asset.
 
-  The runtime the player gets is the JDK this runs on, so run it on the JDK the client is verified on.
+  A version with a suffix is published as a GitHub pre-release and a plain x.y.z as a plain release; -Channel
+  says otherwise when it must. The runtime the player gets is the JDK this runs on, so run it on the JDK
+  the client is verified on.
   Needs git, ant and gh (logged in: `gh auth login`) on the PATH.
 
 .PARAMETER Version
@@ -23,8 +25,8 @@
   A markdown file with the release notes.
 .PARAMETER Message
   The release notes, inline.
-.PARAMETER PreRelease
-  Mark the release as a pre-release.
+.PARAMETER Channel
+  release or beta; by default the version decides (a suffix is a beta).
 .PARAMETER Draft
   Create the release as a draft, to be published by hand on GitHub.
 .PARAMETER NoPublish
@@ -34,7 +36,7 @@ param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Version,
     [string]$Notes,
     [string]$Message,
-    [switch]$PreRelease,
+    [ValidateSet('release', 'beta')][string]$Channel,
     [switch]$Draft,
     [switch]$NoPublish
 )
@@ -45,6 +47,7 @@ $title = "Brodgar.io launcher $Version"
 $tag = "v$Version"
 $asset = "build\Brodgar-launcher-$Version-windows.zip"
 Set-Location $PSScriptRoot
+if (-not $Channel) { $Channel = if ($Version -match '-') { 'beta' } else { 'release' } }
 
 function Run {
     param([string]$Exe, [string[]]$Arguments)
@@ -103,7 +106,7 @@ if ($NoPublish) {
 Run git @('push', 'origin', $branch)
 Run git @('push', 'origin', $tag)
 $create = @('release', 'create', $tag, $asset, '--repo', $repo, '--title', $title, '--notes-file', $notesFile)
-if ($PreRelease) { $create += '--prerelease' }
+if ($Channel -eq 'beta') { $create += '--prerelease' }
 if ($Draft) { $create += '--draft' }
 Run gh $create
-Write-Host "Released $title as $tag."
+Write-Host "Released $title as $tag on the $Channel channel."
