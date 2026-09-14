@@ -35,7 +35,8 @@ import java.util.concurrent.TimeUnit;
  * prints goes to <code>client.log</code>; on, it runs in a command window that shows what it prints and stays
  * open when it ends in an error. The other is the brodgar.io resource cache proxy: off, the client reads the
  * game's own resource server (what its shipped haven-config.properties names); on, it is started with
- * <code>-U</code> and the proxy's URL. Options opens the {@link OptionsDialog}. Everything is remembered in
+ * <code>-U</code> and the proxy's URL. Options opens the {@link OptionsDialog}; Open client folder opens
+ * <code>client/</code> in the file manager. Everything is remembered in
  * <code>launcher.properties</code>. Run with <code>--check</code> it resolves the channel's newest release and
  * prints what it would download and how it would start the client, and exits without touching anything or
  * opening a window.
@@ -80,7 +81,7 @@ public final class Launcher {
             return;
         }
         Launcher[] l = new Launcher[1];
-        Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), () -> l[0].options());
+        Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), () -> l[0].options(), () -> l[0].clientFolder());
         l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
@@ -108,6 +109,20 @@ public final class Launcher {
      *  starts with the executable Play would use, java.exe while the console checkbox is on. */
     private void options() {
         OptionsDialog.show(ui.frame(), settings, exe(javaw, settings));
+    }
+
+    /** The Open client folder button, on the event thread: <code>client/</code> in the file manager — where
+     *  <code>savedata/</code> and <code>addons/</code> are. Before anything is installed there is no such folder,
+     *  and the dialog says so (on the event thread itself: {@link Ui#error} waits for the event thread). */
+    private void clientFolder() {
+        Path dir = client.dir();
+        try {
+            if(!Files.isDirectory(dir))
+                throw new IOException("no client is installed yet, so " + dir + " does not exist");
+            java.awt.Desktop.getDesktop().open(dir.toFile());
+        } catch(IOException | RuntimeException e) {
+            javax.swing.JOptionPane.showMessageDialog(ui.frame(), "The client folder could not be opened: " + e.getMessage(), ui.frame().getTitle(), javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /** Bring the launcher, then the client, up to date, and offer what there is. The title names the client

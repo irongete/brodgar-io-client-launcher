@@ -24,10 +24,10 @@ import javax.swing.WindowConstants;
  * The launcher's one window, a grid of four rows: the status line and the progress bar with the big button
  * beside them — <b>Play</b> once the channel's newest release is installed, <b>Retry</b> when nothing is
  * installed and the download failed, greyed out while the channel has nothing — then the console checkbox, and
- * under it the resource-proxy checkbox, the channel dropdown and <b>Options...</b>, in the button's column. The
- * two checkboxes are settings, remembered the moment they are ticked. Every method may be called from any
- * thread; the big button's action runs off the event thread, so it may block. The dropdown is held while work
- * is going on, since changing the channel starts work of its own.
+ * under it the resource-proxy checkbox, the channel dropdown and <b>Options...</b>, in the button's column, with
+ * <b>Open client folder</b> under that. The two checkboxes are settings, remembered the moment they are ticked.
+ * Every method may be called from any thread; the big button's action runs off the event thread, so it may
+ * block. The dropdown is held while work is going on, since changing the channel starts work of its own.
  */
 final class Ui {
     private final JFrame frame;
@@ -39,7 +39,7 @@ final class Ui {
     private final JComboBox<Channel> channel;
     private Runnable action;
 
-    private Ui(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions) {
+    private Ui(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
@@ -60,6 +60,9 @@ final class Ui {
         });
         JButton options = new JButton("Options...");
         options.addActionListener(ev -> onOptions.run());
+        JButton folder = new JButton("Open client folder");
+        folder.setToolTipText("The client's folder in the file manager: hafen.jar, savedata, addons");
+        folder.addActionListener(ev -> onClientFolder.run());
         console = new JCheckBox("Start the client with a console window", settings.console());
         console.setToolTipText("The client runs in a command window that shows what it prints and stays open when it ends in an error");
         console.addActionListener(ev -> settings.console(console.isSelected()));
@@ -108,6 +111,9 @@ final class Ui {
         panel.add(pick, c);
         c.gridx = 2; c.fill = GridBagConstraints.HORIZONTAL; c.insets = new Insets(0, 16, 0, 0);
         panel.add(options, c);
+        // row 4: Open client folder, under Options
+        c.gridy = 4; c.insets = new Insets(8, 16, 0, 0);
+        panel.add(folder, c);
 
         frame.setContentPane(panel);
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -119,12 +125,13 @@ final class Ui {
     }
 
     /** Open the window. The dropdown and the checkboxes start as <code>settings</code> has them, and the checkboxes
-     *  write themselves back into it; <code>onChannel</code> hears every change of the dropdown and
-     *  <code>onOptions</code> the Options button, both on the event thread. */
-    static Ui open(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions) {
+     *  write themselves back into it; <code>onChannel</code> hears every change of the dropdown,
+     *  <code>onOptions</code> the Options button and <code>onClientFolder</code> the Open client folder button,
+     *  all on the event thread. */
+    static Ui open(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
         Ui[] out = new Ui[1];
         try {
-            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, settings, onChannel, onOptions));
+            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, settings, onChannel, onOptions, onClientFolder));
         } catch(InterruptedException | InvocationTargetException e) {
             throw new IllegalStateException(e);
         }

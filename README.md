@@ -16,10 +16,14 @@ brodgar.io-client-launcher-<version>-windows/   the zip, unzipped: its files sit
   client.log             what the client printed on its last run
 ```
 
+Started from Steam, the same launcher keeps all of that in `%LOCALAPPDATA%\Brodgar.io` instead, on the Java
+Steam ships with the game — see [Steam Workshop](#steam-workshop).
+
 ## What it does
 
 The window opens at once — a status line, a progress bar, the big button, and under them the console
-checkbox, the resource-proxy checkbox, the channel dropdown and **Options...** — and the work runs behind it:
+checkbox, the resource-proxy checkbox, the channel dropdown, **Options...** and **Open client folder** — and
+the work runs behind it:
 
 0. It asks GitHub for the newest release of the launcher itself on the channel and, when that is newer than
    the version in its own manifest, starts the updater and exits — see [Updating itself](#updating-itself).
@@ -52,6 +56,9 @@ release. Picking a channel looks again at once; while the client is in beta the 
 **Use brodgar.io resource cache proxy**, the checkbox: off, the client reads the game's resources from the
 game's own server, the one its `haven-config.properties` names; on, it is started with `-U` and the
 proxy's address.
+
+**Open client folder** opens `client/` in Explorer — `hafen.jar`, `savedata/` (the player's own data),
+`addons/`, `haven-errors.log` — the place to drop an addon in.
 
 **Options...** is how the game is started, each setting under a plain name with a line saying what it does
 and, at the bottom, the command it all makes: the memory the game is given (a bar from 1 GB to half of
@@ -129,6 +136,7 @@ Every step runs on it — `javac`, `jlink`, the development runs. Without that l
 | `ant release` | `build/brodgar.io-client-launcher-<version>-windows.zip`, the release asset: that folder's contents at the zip's root |
 | `ant check` | the launcher's `--check`, its folder being this one |
 | `ant run` | the launcher in this folder (`client/` and `launcher.properties` appear here; ignored by git) |
+| `ant workshop` | `build/workshop/`, the Steam Workshop item: `launcher.jar` and the files in `workshop/` |
 
 `-Dversion=1.0.1` names the launcher's version (without it, `build.xml`'s default: the last release's, so a
 development build says what it is based on). Nothing built is committed: the
@@ -145,3 +153,38 @@ as `v1.0.0`, pushes the branch and the tag, and creates the GitHub release with 
 notes come from the file, from `-Message "..."`, or from the commit subjects since the previous `v*` tag.
 A version with a suffix is published as a pre-release, a plain one as a release (`-Channel` overrides);
 `-NoPublish` stops after the tag; `-Draft` is passed on to GitHub.
+
+## Steam Workshop
+
+Haven & Hearth's Steam launcher offers, beside the default client, every Workshop client the player is
+subscribed to, each an item whose `workshop-client.properties` says how it starts. Ours is
+[`workshop/`](workshop/): the item is `launcher.jar` with those files around it, and its launch is direct —
+the Steam launcher loads the jar into its own JVM and calls `io.brodgar.launcher.Workshop.main`, which starts
+this launcher as a process of its own on the same Java (the runtime Steam ships with the game, which then runs
+the client too) and with the same environment, `SteamAppId` included, which is what lets the client's *Log in
+with Steam* button work. The launcher's folder is `%LOCALAPPDATA%\Brodgar.io` — `client/`, `savedata/`,
+`launcher.properties`, `client.log` and `launcher.log` (what the launcher itself printed) — never the item's,
+which Steam rewrites on every update. There is no `runtime/` there, so the launcher never updates itself:
+uploading a new item is how it is updated on Steam. The client is installed and kept up to date from GitHub
+as ever.
+
+The item is published by [`publish-steam.ps1`](publish-steam.ps1), with the Steam client running and logged in,
+`java` and `ant` on the PATH, and the client checkout built (`ant bin` there: the upload tool,
+`haven.SteamWorkshop`, is the client's own, in its `bin\hafen.jar`):
+
+```powershell
+.\publish-steam.ps1                                # the launcher as it stands, visibility as the file says
+.\publish-steam.ps1 -Version 1.0.1 -Message "..."  # the version the window shows, and a change note
+.\publish-steam.ps1 -Visibility public             # flip the item public (private, friends: the same way)
+.\publish-steam.ps1 -NoUpload                      # build build\workshop\ and stop
+```
+
+It runs `ant workshop` and uploads `build\workshop\`. The first upload created the item — `workshop-id` in
+[`workshop/workshop-client.properties`](workshop/workshop-client.properties) — and every later one updates it,
+after which Steam hands the new launcher to every subscriber (Haven & Hearth's launcher downloads a stale item
+on its next start). `-Visibility` is written into that file before the build, so the file always says what
+the item is; the upload applies the file's visibility, title, description and preview image every time, and
+overwrites what the item's web page was given by hand. `-Version` stamps the jar's manifest, as `ant
+-Dversion=` does for a release; without it, the newest `v*` tag reachable from HEAD. Steam wants the
+Workshop Legal Agreement accepted before an item goes public — the tool says so when it applies, and it is
+accepted once, on the item's web page.

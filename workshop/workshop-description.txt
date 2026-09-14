@@ -1,0 +1,8 @@
+A custom client for Haven & Hearth, forked from the default client.
+
+- AddOns: a Lua addon system
+- Voice chat
+- Multi-session: several characters logged in at once
+
+Client: https://github.com/irongete/brodgar-io-client
+Launcher: https://github.com/irongete/brodgar-io-client-launcher

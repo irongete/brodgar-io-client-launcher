@@ -72,6 +72,19 @@
     <echo message="Launcher ready: build/dist/${app.name}/run.bat" />
   </target>
 
+  <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), the whole folder
+       being what the client's upload tool sends (README.md, "Steam Workshop"). No runtime: on Steam the
+       launcher runs on the Java Steam ships with the game, and so does the client. -->
+  <target name="workshop" depends="jar">
+    <delete dir="build/workshop" />
+    <mkdir dir="build/workshop" />
+    <copy file="build/launcher.jar" todir="build/workshop" />
+    <copy todir="build/workshop">
+      <fileset dir="workshop" />
+    </copy>
+    <echo message="Workshop item ready: build/workshop/" />
+  </target>
+
   <target name="release" depends="dist">
     <!-- The files sit at the zip's root, no folder around them: Windows' Extract All makes one folder, named after
          the zip, and a folder inside it would give the player two. -->
