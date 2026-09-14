@@ -72,7 +72,7 @@ final class OptionsDialog {
         ipv6.setSelectedIndex(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
         JTextField opts = new JTextField(settings.javaOptsText(), 30);
         JTextField proxyUrl = new JTextField(settings.resourceProxyUrl(), 30);
-        JCheckBox updates = new JCheckBox("Look for a newer game version when the launcher opens", settings.checkUpdates());
+        JCheckBox updates = new JCheckBox("Look for a newer launcher and game when the launcher opens", settings.checkUpdates());
 
         JTextArea preview = new JTextArea(5, 64);
         preview.setEditable(false);
@@ -115,7 +115,7 @@ final class OptionsDialog {
         r.add("Resource cache address", proxyUrl,
               "Where the game fetches its resources from while 'Use brodgar.io resource cache proxy' is ticked.");
         r.add(null, updates,
-              "Off, the launcher never looks for a release and offers whatever is installed.");
+              "Off, the launcher never looks for a release, its own or the game's, and offers whatever is installed.");
         r.preview("The game will be started as:", new JScrollPane(preview));
 
         JButton ok = new JButton("OK");

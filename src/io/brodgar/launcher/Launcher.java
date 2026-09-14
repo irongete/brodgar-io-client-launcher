@@ -39,6 +39,12 @@ import java.util.concurrent.TimeUnit;
  * <code>launcher.properties</code>. Run with <code>--check</code> it resolves the channel's newest release and
  * prints what it would download and how it would start the client, and exits without touching anything or
  * opening a window.
+ *
+ * <p>Before the client, the launcher looks at its own releases and, when a newer one is out on the channel,
+ * starts the {@link Updater} and exits: the updater downloads the release, puts it in place and starts the
+ * launcher again — with <code>--no-launcher-update</code> when it could not, so that run does not try again.
+ * Only a launcher as shipped does this, <code>launcher.jar</code> on the runtime beside it; a development run
+ * has nothing to replace.
  */
 public final class Launcher {
     private final Path home;
@@ -46,28 +52,36 @@ public final class Launcher {
     private final ClientInstall client;
     private final Path javaw;
     private final Ui ui;
+    /** Whether the launcher runs as shipped, and so may replace itself; false in a development run. */
+    private final boolean shipped;
+    /** <code>--no-launcher-update</code>: the updater that started this run failed, and once is enough. */
+    private final boolean noLauncherUpdate;
 
-    private Launcher(Path home, Settings settings, ClientInstall client, Path javaw, Ui ui) {
+    private Launcher(Path home, Settings settings, ClientInstall client, Path javaw, Ui ui, boolean shipped, boolean noLauncherUpdate) {
         this.home = home;
         this.settings = settings;
         this.client = client;
         this.javaw = javaw;
         this.ui = ui;
+        this.shipped = shipped;
+        this.noLauncherUpdate = noLauncherUpdate;
     }
 
     public static void main(String[] args) {
-        boolean check = Arrays.asList(args).contains("--check");
+        List<String> a = Arrays.asList(args);
+        boolean check = a.contains("--check");
         Path home = home();
         Settings settings = Settings.load(home.resolve("launcher.properties"), !check);
         ClientInstall client = new ClientInstall(home.resolve("client"));
         Path javaw = javaw(home);
+        boolean shipped = shipped(home);
         if(check) {
-            check(home, settings, client, javaw);
+            check(home, settings, client, javaw, shipped);
             return;
         }
         Launcher[] l = new Launcher[1];
         Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), () -> l[0].options());
-        l[0] = new Launcher(home, settings, client, javaw, ui);
+        l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
 
@@ -96,12 +110,14 @@ public final class Launcher {
         OptionsDialog.show(ui.frame(), settings, exe(javaw, settings));
     }
 
-    /** Bring the client up to date, then offer what there is. The title names the client only while Play offers
-     *  it: what sits in <code>client/</code> without a channel behind it is not the launcher's to announce. */
+    /** Bring the launcher, then the client, up to date, and offer what there is. The title names the client
+     *  only while Play offers it: what sits in <code>client/</code> without a channel behind it is not the
+     *  launcher's to announce. */
     private void prepare() {
         ui.busy();
         Outcome o;
         try {
+            updateSelf();
             o = update();
         } catch(Exception e) {
             ui.status("Unexpected: " + e);
@@ -113,6 +129,50 @@ public final class Launcher {
             case NO_RELEASE -> ui.idle();
             case NOTHING -> ui.ready("Retry", this::prepare);
         }
+    }
+
+    /** Bring this launcher up to date with its own releases on the channel: when a newer one is out, start the
+     *  updater and exit — it does the rest and starts the launcher again. Back when there is nothing to do, or
+     *  the updater could not be started, which the status line says; GitHub out of reach is left to the client's
+     *  check, which follows and says so. */
+    private void updateSelf() {
+        if(!shipped)
+            return;
+        Updater.tidy(home);
+        if(noLauncherUpdate || !settings.checkUpdates())
+            return;
+        String tag;
+        try {
+            ui.status("Looking for a newer launcher...");
+            tag = newerLauncher(settings);
+        } catch(Exception e) {
+            return;
+        }
+        if(tag == null)
+            return;
+        String v = GitHubRelease.version(tag);
+        try {
+            ui.status("Launcher " + v + " is out: updating...");
+            Updater.launch(home, v, GitHubRelease.assetUrl(settings.launcherRepo(), tag, Updater.asset(tag)));
+        } catch(Exception e) {
+            ui.status("Launcher " + v + " could not be installed: " + e.getMessage());
+            Updater.tidy(home);
+            return;
+        }
+        ui.close();
+        System.exit(0);
+    }
+
+    /** The tag of the newest launcher release on the channel when it is newer than this launcher, else null:
+     *  this launcher is the newest, or newer (a beta on the Release channel), or the channel has nothing. */
+    private static String newerLauncher(Settings settings) throws IOException, InterruptedException {
+        String tag;
+        try {
+            tag = GitHubRelease.newestTag(settings.launcherRepo(), settings.channel());
+        } catch(GitHubRelease.NoReleaseException e) {
+            return null;
+        }
+        return (GitHubRelease.compare(tag, version()) > 0) ? tag : null;
     }
 
     /** Fetch the channel's newest release when it differs from the installed one, saying in the status line
@@ -149,7 +209,7 @@ public final class Launcher {
             return Outcome.READY;
         }
         try {
-            String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix());
+            String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + GitHubRelease.version(latest) + ".zip");
             ui.status((installed == null) ? "Downloading client " + latest + " (" + kind + ")..." : "Installing " + latest + " (" + kind + ") over " + installed + "...");
             Files.createDirectories(client.dir());
             Path zip = client.download();
@@ -291,15 +351,24 @@ public final class Launcher {
         return cmd;
     }
 
-    private static void check(Path home, Settings settings, ClientInstall client, Path javaw) {
+    private static void check(Path home, Settings settings, ClientInstall client, Path javaw, boolean shipped) {
         System.out.println("home:      " + home);
         System.out.println("runtime:   " + javaw + (Files.exists(javaw) ? "" : "  (MISSING)"));
+        System.out.println("launcher:  " + version() + (shipped ? " (as shipped: kept at the channel's newest release)" : " (a development run: not updated)"));
+        if(shipped) {
+            try {
+                String tag = newerLauncher(settings);
+                System.out.println("newer:     " + ((tag == null) ? "none" : tag + "  " + GitHubRelease.assetUrl(settings.launcherRepo(), tag, Updater.asset(tag))));
+            } catch(Exception e) {
+                System.out.println("newer:     unreachable: " + e);
+            }
+        }
         System.out.println("installed: " + client.installedVersion());
         System.out.println("channel:   " + settings.channel().key);
         try {
             String latest = GitHubRelease.newestTag(settings.repo(), settings.channel());
             System.out.println("newest:    " + latest);
-            System.out.println("asset:     " + GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix()));
+            System.out.println("asset:     " + GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + GitHubRelease.version(latest) + ".zip"));
         } catch(GitHubRelease.NoReleaseException e) {
             System.out.println("newest:    none on this channel (" + e.getMessage() + ")");
         } catch(Exception e) {
@@ -319,17 +388,41 @@ public final class Launcher {
         String set = System.getProperty("launcher.home");
         if(set != null)
             return Paths.get(set).toAbsolutePath();
+        Path jar = jar();
+        return (jar != null) ? jar.getParent() : Paths.get("").toAbsolutePath();
+    }
+
+    /** The jar this launcher runs from, or null: a classes/ folder, as a development run has it. */
+    static Path jar() {
         try {
             CodeSource src = Launcher.class.getProtectionDomain().getCodeSource();
             if(src != null) {
                 Path self = Paths.get(src.getLocation().toURI());
-                if(Files.isRegularFile(self))               // the jar; a classes/ folder is a development run
-                    return self.toAbsolutePath().getParent();
+                if(Files.isRegularFile(self))
+                    return self.toAbsolutePath();
             }
         } catch(URISyntaxException | RuntimeException e) {
-            // fall through to the working directory
+            // no jar to speak of
         }
-        return Paths.get("").toAbsolutePath();
+        return null;
+    }
+
+    /** The launcher's version, from the jar's manifest — <code>1.0.1</code> — or null off a classes/ folder. */
+    static String version() {
+        return Launcher.class.getPackage().getImplementationVersion();
+    }
+
+    /** Whether the launcher runs as shipped: <code>launcher.jar</code> in <code>home</code>, with a version in its
+     *  manifest, on the runtime beside it. A development run — a classes/ folder, or <code>build/launcher.jar</code>
+     *  with <code>launcher.home</code> naming the source folder — is not, and is not replaced by a release. */
+    static boolean shipped(Path home) {
+        try {
+            Path jar = jar();
+            return (jar != null) && (version() != null) && Files.isSameFile(jar, home.resolve("launcher.jar"))
+                && Files.isDirectory(home.resolve("runtime"));
+        } catch(IOException e) {
+            return false;                           // no launcher.jar in home: not the shipped folder
+        }
     }
 
     /** The runtime's windowless Java: <code>runtime/bin/javaw.exe</code> beside the launcher, or the JVM running
@@ -345,7 +438,7 @@ public final class Launcher {
     /** The window title: the launcher's version from the jar's manifest, and the client's when one is offered
      *  (<code>null</code> while none is). */
     private static String title(String offered) {
-        String v = Launcher.class.getPackage().getImplementationVersion();
+        String v = version();
         return "Brodgar.io" + ((v == null) ? "" : " launcher " + v) + ((offered == null) ? "" : " · client " + offered);
     }
 

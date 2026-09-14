@@ -184,11 +184,16 @@ final class GitHubRelease {
         throw new IOException("unexpected answer from github.com/" + repo + " (HTTP " + res.statusCode() + ")");
     }
 
-    /** The zip a release carries: <code>&lt;prefix&gt;&lt;version&gt;.zip</code>, the version being the tag
-     *  without its leading <code>v</code> — <code>brodgar-io-client-0.1.0.zip</code> under <code>v0.1.0</code>. */
-    static String assetUrl(String repo, String tag, String prefix) {
-        String version = tag.startsWith("v") ? tag.substring(1) : tag;
-        return "https://github.com/" + repo + "/releases/download/" + tag + "/" + prefix + version + ".zip";
+    /** The version a tag names: the tag without its leading <code>v</code> — <code>0.1.0</code> for
+     *  <code>v0.1.0</code>. The release zips are named after it. */
+    static String version(String tag) {
+        return tag.startsWith("v") ? tag.substring(1) : tag;
+    }
+
+    /** Where <code>asset</code> of the release tagged <code>tag</code> is downloaded from: the fixed
+     *  <code>releases/download/&lt;tag&gt;/&lt;asset&gt;</code> URL. */
+    static String assetUrl(String repo, String tag, String asset) {
+        return "https://github.com/" + repo + "/releases/download/" + tag + "/" + asset;
     }
 
     /** Download <code>url</code> to <code>to</code>, reporting the fraction done (or -1 while the size is unknown).

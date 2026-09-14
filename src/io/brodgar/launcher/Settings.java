@@ -56,12 +56,16 @@ public final class Settings {
         resource.proxy=false
         resource.proxy.url=http://brodgar.io/res/
 
-        # false: never look for a release, offer whatever is installed.
+        # false: never look for a release -- the launcher's own or the game's -- and offer whatever is installed.
         check.updates=true
 
         # Where the client's releases are, as owner/repo on GitHub, and the name its zip starts with.
         repo=irongete/brodgar-io-client
         asset.prefix=brodgar-io-client-
+
+        # Where the launcher's own releases are: it keeps itself at the newest one on the channel, as it keeps
+        # the client.
+        launcher.repo=irongete/brodgar-io-client-launcher
         """;
 
     private final Path file;
@@ -103,6 +107,7 @@ public final class Settings {
     String javaOptsText()     {return get("java.opts", "");}
     String repo()             {return get("repo", "irongete/brodgar-io-client");}
     String assetPrefix()      {return get("asset.prefix", "brodgar-io-client-");}
+    String launcherRepo()     {return get("launcher.repo", "irongete/brodgar-io-client-launcher");}
     Channel channel()         {return Channel.of(get("channel", "beta"), Channel.BETA);}
     boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}

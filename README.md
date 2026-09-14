@@ -1,8 +1,8 @@
 # Brodgar.io client launcher
 
-The one thing a player installs. It keeps the [Brodgar.io client](https://github.com/irongete/brodgar-io-client)
-at the newest GitHub release of the chosen channel and starts it, on the Play button, on the Java runtime
-that ships beside the launcher — so nothing else has to be installed.
+The one thing a player installs. It keeps itself and the [Brodgar.io client](https://github.com/irongete/brodgar-io-client)
+at the newest GitHub release of the chosen channel and starts the client, on the Play button, on the Java
+runtime that ships beside the launcher — so nothing else has to be installed.
 
 ```text
 Brodgar-launcher-<version>-windows/   the zip, unzipped: its files sit at its root, so Extract All makes this one folder
@@ -21,6 +21,8 @@ Brodgar-launcher-<version>-windows/   the zip, unzipped: its files sit at its ro
 The window opens at once — a status line, a progress bar, the big button, and under them the console
 checkbox, the resource-proxy checkbox, the channel dropdown and **Options...** — and the work runs behind it:
 
+0. It asks GitHub for the newest release of the launcher itself on the channel and, when that is newer than
+   the version in its own manifest, starts the updater and exits — see [Updating itself](#updating-itself).
 1. It reads the tag last installed and asks GitHub for the channel's newest release: the list the API
    answers with (one call, no token), the highest version by semver order — `v0.1.0` above `v0.1.0-beta.3`,
    whatever order GitHub lists them in. Should the API be out of reach, the redirect
@@ -62,6 +64,24 @@ Unsafe allowance — is not on offer.
 Everything is remembered in `launcher.properties`. The launcher speaks English only, and so does its
 runtime: it carries no locale data beyond the JDK's built-in English.
 
+## Updating itself
+
+A launcher that finds a newer release of itself on the channel — the same GitHub listing as the client's,
+on `launcher.repo` — starts the updater and closes. The updater is a small program of its own in the same
+jar (`io.brodgar.launcher.Updater`), run from a copy of the jar in `update/`, since Java holds
+`launcher.jar` open for as long as it runs. It shows a window with a progress bar, waits for the launcher to
+be gone, downloads `Brodgar-launcher-<version>-windows.zip` into `update/`, unpacks it there, puts
+`launcher.jar` and `run.bat` in place — each in one atomic move, so a failure leaves the old file rather than
+none — and starts the launcher again, which removes `update/`. The client is never touched.
+
+The runtime cannot be replaced that way: the updater runs on it, and so does the game, possibly for hours.
+The release's runtime is left beside it as `runtime.new/`, and `run.bat` swaps it in the next time it starts
+the launcher — two renames, the first of which Windows refuses while anything still runs on `runtime/`, in
+which case the swap waits for a later start. Until then the new launcher runs on the old runtime, which it
+can. When the update fails, a dialog says why and the launcher as it stands is started with
+`--no-launcher-update`, so that run gets to the game; the next start tries again. A development run
+(`ant run`, `ant check`) is not as shipped and never updates itself.
+
 ## Settings
 
 `launcher.properties`, beside the launcher, in UTF-8; delete a line to get its default back. What the
@@ -79,12 +99,14 @@ launcher writes, it writes the way Java's `Properties` reads: a backslash in a v
 | `console` | `false` | the checkbox: start the client on `java.exe` in a command window, kept open when it ends in an error |
 | `resource.proxy` | `false` | the checkbox: read resources through the brodgar.io cache proxy (`-U`) |
 | `resource.proxy.url` | `http://brodgar.io/res/` | the proxy's address |
-| `check.updates` | `true` | `false` never looks for a release and offers what is installed |
+| `check.updates` | `true` | `false` never looks for a release — the launcher's own or the game's — and offers what is installed |
 | `repo` | `irongete/brodgar-io-client` | where the client's releases are |
 | `asset.prefix` | `brodgar-io-client-` | what the release zip's name starts with |
+| `launcher.repo` | `irongete/brodgar-io-client-launcher` | where the launcher's own releases are |
 
-Run with `--check` (`run.bat --check`, or `ant check`) the launcher resolves the channel's newest release
-and prints what it would download and the command it would run, without a window.
+Run with `--check` (`run.bat --check`, or `ant check`) the launcher resolves the newest release of itself
+and of the channel's client and prints what it would download and the command it would run, without a
+window. `--no-launcher-update` starts it without looking for a newer launcher, for that run.
 
 ## Build
 
