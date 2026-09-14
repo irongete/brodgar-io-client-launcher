@@ -5,7 +5,7 @@ at the newest GitHub release of the chosen channel and starts the client, on the
 runtime that ships beside the launcher — so nothing else has to be installed.
 
 ```text
-Brodgar-launcher-<version>-windows/   the zip, unzipped: its files sit at its root, so Extract All makes this one folder
+brodgar.io-client-launcher-<version>-windows/   the zip, unzipped: its files sit at its root, so Extract All makes this one folder
   run.bat                starts the launcher on the runtime beside it
   launcher.jar
   runtime/               the Java runtime (jlink) — the launcher's and the client's
@@ -70,7 +70,7 @@ A launcher that finds a newer release of itself on the channel — the same GitH
 on `launcher.repo` — starts the updater and closes. The updater is a small program of its own in the same
 jar (`io.brodgar.launcher.Updater`), run from a copy of the jar in `update/`, since Java holds
 `launcher.jar` open for as long as it runs. It shows a window with a progress bar, waits for the launcher to
-be gone, downloads `Brodgar-launcher-<version>-windows.zip` into `update/`, unpacks it there, puts
+be gone, downloads `brodgar.io-client-launcher-<version>-windows.zip` into `update/`, unpacks it there, puts
 `launcher.jar` and `run.bat` in place — each in one atomic move, so a failure leaves the old file rather than
 none — and starts the launcher again, which removes `update/`. The client is never touched.
 
@@ -126,7 +126,7 @@ Every step runs on it — `javac`, `jlink`, the development runs. Without that l
 | `ant jar` | `build/launcher.jar`, its manifest carrying the version |
 | `ant runtime` | `build/runtime/`, jlink of the modules `hafen.jar` and its libraries need (by `jdeps`) |
 | `ant dist` | `build/dist/Brodgar/`, the folder above: the jar, `run.bat`, the runtime |
-| `ant release` | `build/Brodgar-launcher-<version>-windows.zip`, the release asset: that folder's contents at the zip's root |
+| `ant release` | `build/brodgar.io-client-launcher-<version>-windows.zip`, the release asset: that folder's contents at the zip's root |
 | `ant check` | the launcher's `--check`, its folder being this one |
 | `ant run` | the launcher in this folder (`client/` and `launcher.properties` appear here; ignored by git) |
 

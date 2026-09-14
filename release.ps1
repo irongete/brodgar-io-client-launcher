@@ -21,7 +21,7 @@
   Needs git, ant and gh (logged in: `gh auth login`) on the PATH.
 
 .PARAMETER Version
-  1.2.3 or 1.2.3-beta.1: the tag is v<Version>, the asset Brodgar-launcher-<Version>-windows.zip.
+  1.2.3 or 1.2.3-beta.1: the tag is v<Version>, the asset brodgar.io-client-launcher-<Version>-windows.zip.
 .PARAMETER Notes
   A markdown file with the release notes.
 .PARAMETER Message
@@ -49,7 +49,7 @@ $ErrorActionPreference = 'Stop'
 $repo = 'irongete/brodgar-io-client-launcher'
 $title = "Brodgar.io launcher $Version"
 $tag = "v$Version"
-$asset = "build\Brodgar-launcher-$Version-windows.zip"
+$asset = "build\brodgar.io-client-launcher-$Version-windows.zip"
 Set-Location $PSScriptRoot
 if (-not $Channel) { $Channel = if ($Version -match '-') { 'beta' } else { 'release' } }
 

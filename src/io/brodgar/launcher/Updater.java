@@ -44,8 +44,8 @@ import javax.swing.WindowConstants;
  */
 public final class Updater {
     private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** The release asset, as build.xml names it: <code>Brodgar-launcher-&lt;version&gt;-windows.zip</code>. */
-    private static final String ASSET_PREFIX = "Brodgar-launcher-", ASSET_SUFFIX = "-windows.zip";
+    /** The release asset, as build.xml names it: <code>brodgar.io-client-launcher-&lt;version&gt;-windows.zip</code>. */
+    private static final String ASSET_PREFIX = "brodgar.io-client-launcher-", ASSET_SUFFIX = "-windows.zip";
 
     private final Path home;
     private final JFrame frame;
@@ -172,7 +172,7 @@ public final class Updater {
 
     // ---- the launcher's side ---------------------------------------------------------------------------------
 
-    /** The zip a release carries: <code>Brodgar-launcher-1.1.0-windows.zip</code> under <code>v1.1.0</code>. */
+    /** The zip a release carries: <code>brodgar.io-client-launcher-1.1.0-windows.zip</code> under <code>v1.1.0</code>. */
     static String asset(String tag) {
         return ASSET_PREFIX + GitHubRelease.version(tag) + ASSET_SUFFIX;
     }

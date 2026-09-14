@@ -17,6 +17,8 @@
   <property name="version" value="1.0.0" />
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
+  <!-- The release asset: what the launcher downloads to update itself, so Updater.java names it the same way. -->
+  <property name="asset" value="brodgar.io-client-launcher-${version}-windows.zip" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
        handshake wants on a JDK before 22 (an empty module after), jdk.management, which the Options
        dialog reads the machine's memory through, and java.sql, which the addon store's SQLite driver
@@ -73,8 +75,8 @@
   <target name="release" depends="dist">
     <!-- The files sit at the zip's root, no folder around them: Windows' Extract All makes one folder, named after
          the zip, and a folder inside it would give the player two. -->
-    <zip destfile="build/${app.name}-launcher-${version}-windows.zip" basedir="build/dist/${app.name}" />
-    <echo message="Release asset: build/${app.name}-launcher-${version}-windows.zip" />
+    <zip destfile="build/${asset}" basedir="build/dist/${app.name}" />
+    <echo message="Release asset: build/${asset}" />
   </target>
 
   <!-- Development: the launcher on the build JDK, its folder being this one (client/ and launcher.properties
