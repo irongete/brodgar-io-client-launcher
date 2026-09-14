@@ -16,7 +16,10 @@ import java.util.List;
  * the real launcher as a process of its own — on the same Java (Steam's own runtime, which then runs the client
  * too) and with the same environment (<code>SteamAppId</code> and the rest of what Steam sets on a game it
  * starts, which is what lets the client log in with Steam) — and returns, so the Steam launcher saves the
- * player's choice and closes.
+ * player's choice and disposes its chooser. Then it ends that JVM: the Steam launcher's does not end by itself
+ * once <code>main</code> returns — AWT's auto-shutdown never fires in it — and while it lives, with its Steam
+ * API session open, Steam shows the game running and its Stop button waits on it forever. The exit lands a
+ * moment after <code>main</code> returns, so the launcher has had its turn first.
  *
  * <p>The launcher's folder is not the Workshop item's. Steam rewrites that folder on every update of the item,
  * and <code>client/</code>, with the player's <code>savedata/</code> in it, has to outlive that: it is
@@ -47,6 +50,16 @@ public final class Workshop {
         } catch(IOException | RuntimeException e) {
             JOptionPane.showMessageDialog(null, "The Brodgar.io launcher could not be started: " + e, "Brodgar.io", JOptionPane.ERROR_MESSAGE);
         }
+        Thread exit = new Thread(() -> {
+            try {
+                Thread.sleep(2000);
+            } catch(InterruptedException e) {
+                // then now
+            }
+            System.exit(0);
+        }, "workshop-exit");
+        exit.setDaemon(true);
+        exit.start();
     }
 
     /** The launcher's folder for a Steam start: <code>%LOCALAPPDATA%\Brodgar.io</code>, or
