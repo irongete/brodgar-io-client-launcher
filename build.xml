@@ -18,9 +18,10 @@
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
-       handshake wants on a JDK before 22 (an empty module after), and jdk.management, which the Options
-       dialog reads the machine's memory through. English only: no jdk.localedata. -->
-  <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.management" />
+       handshake wants on a JDK before 22 (an empty module after), jdk.management, which the Options
+       dialog reads the machine's memory through, and java.sql, which the addon store's SQLite driver
+       (sqlite-jdbc) is written against. English only: no jdk.localedata. -->
+  <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,java.sql,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.management" />
 
   <target name="compile">
     <mkdir dir="build/classes" />
