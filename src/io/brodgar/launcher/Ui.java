@@ -21,13 +21,11 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * The launcher's one window, a grid of four rows: the status line and the progress bar with the big button
- * beside them — <b>Play</b> once the channel's newest release is installed, <b>Retry</b> when nothing is
- * installed and the download failed, greyed out while the channel has nothing — then the console checkbox, and
- * under it the resource-proxy checkbox, the channel dropdown and <b>Options...</b>, in the button's column, with
- * <b>Open client folder</b> under that. The two checkboxes are settings, remembered the moment they are ticked.
- * Every method may be called from any thread; the big button's action runs off the event thread, so it may
- * block. The dropdown is held while work is going on, since changing the channel starts work of its own.
+ * The main window. GridBag rows: status + progress bar with the main button (Play / Retry / disabled) spanning
+ * both; console checkbox; proxy checkbox, channel dropdown, Options; Open client folder. The console checkbox
+ * writes <code>settings</code> directly; the proxy checkbox goes through <code>onProxy</code> (it also writes the
+ * client's file). All methods are thread-safe (<code>invokeLater</code>); the main button's action runs on a
+ * thread of its own. The dropdown is disabled while work runs.
  */
 final class Ui {
     private final JFrame frame;
@@ -39,11 +37,11 @@ final class Ui {
     private final JComboBox<Channel> channel;
     private Runnable action;
 
-    private Ui(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
+    private Ui(String title, Settings settings, Consumer<Channel> onChannel, Consumer<Boolean> onProxy, Runnable onOptions, Runnable onClientFolder) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
-            // the cross-platform look is fine too
+            // cross-platform look and feel then
         }
         frame = new JFrame(title);
         status = new JLabel("Starting...");
@@ -67,7 +65,7 @@ final class Ui {
         console.setToolTipText("The client runs in a command window that shows what it prints and stays open when it ends in an error");
         console.addActionListener(ev -> settings.console(console.isSelected()));
         proxy = new JCheckBox("Use brodgar.io resource cache proxy", settings.resourceProxy());
-        proxy.addActionListener(ev -> settings.resourceProxy(proxy.isSelected()));
+        proxy.addActionListener(ev -> onProxy.accept(proxy.isSelected()));
         channel = new JComboBox<>(Channel.values());
         channel.setSelectedItem(settings.channel());
         channel.setRenderer(new javax.swing.DefaultListCellRenderer() {
@@ -86,22 +84,22 @@ final class Ui {
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(0, 0, 8, 0);
-        // row 0: the status, over both left columns
+        // row 0, columns 0-1: status
         c.gridx = 0; c.gridy = 0; c.gridwidth = 2; c.weightx = 1;
         c.anchor = GridBagConstraints.WEST; c.fill = GridBagConstraints.HORIZONTAL;
         panel.add(status, c);
-        // row 1: the bar
+        // row 1, columns 0-1: bar
         c.gridy = 1;
         panel.add(bar, c);
-        // rows 0-1, right column: the big button, filling both
+        // rows 0-1, column 2: main button
         c.gridx = 2; c.gridy = 0; c.gridwidth = 1; c.gridheight = 2; c.weightx = 0;
         c.fill = GridBagConstraints.BOTH; c.insets = new Insets(0, 16, 8, 0);
         panel.add(button, c);
-        // row 2: the console checkbox, over both left columns
+        // row 2, columns 0-1: console checkbox
         c.gridheight = 1; c.insets = new Insets(0, 0, 0, 0);
         c.gridx = 0; c.gridy = 2; c.gridwidth = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
         panel.add(console, c);
-        // row 3: the proxy checkbox, the channel, and Options in the button's column
+        // row 3: proxy checkbox, channel, Options
         c.gridy = 3; c.gridwidth = 1;
         panel.add(proxy, c);
         JPanel pick = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 0));
@@ -111,7 +109,7 @@ final class Ui {
         panel.add(pick, c);
         c.gridx = 2; c.fill = GridBagConstraints.HORIZONTAL; c.insets = new Insets(0, 16, 0, 0);
         panel.add(options, c);
-        // row 4: Open client folder, under Options
+        // row 4, column 2: Open client folder
         c.gridy = 4; c.insets = new Insets(8, 16, 0, 0);
         panel.add(folder, c);
 
@@ -124,14 +122,12 @@ final class Ui {
         frame.setVisible(true);
     }
 
-    /** Open the window. The dropdown and the checkboxes start as <code>settings</code> has them, and the checkboxes
-     *  write themselves back into it; <code>onChannel</code> hears every change of the dropdown,
-     *  <code>onOptions</code> the Options button and <code>onClientFolder</code> the Open client folder button,
-     *  all on the event thread. */
-    static Ui open(String title, Settings settings, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
+    /** Build and show the window on the event thread; controls start from <code>settings</code>. The callbacks
+     *  run on the event thread. */
+    static Ui open(String title, Settings settings, Consumer<Channel> onChannel, Consumer<Boolean> onProxy, Runnable onOptions, Runnable onClientFolder) {
         Ui[] out = new Ui[1];
         try {
-            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, settings, onChannel, onOptions, onClientFolder));
+            SwingUtilities.invokeAndWait(() -> out[0] = new Ui(title, settings, onChannel, onProxy, onOptions, onClientFolder));
         } catch(InterruptedException | InvocationTargetException e) {
             throw new IllegalStateException(e);
         }
@@ -150,7 +146,7 @@ final class Ui {
         SwingUtilities.invokeLater(() -> status.setText(s));
     }
 
-    /** A fraction in 0..1, or a negative number while the size is unknown. */
+    /** Fraction in 0..1; negative = indeterminate. */
     void progress(double fraction) {
         SwingUtilities.invokeLater(() -> {
             bar.setIndeterminate(fraction < 0);
@@ -159,8 +155,7 @@ final class Ui {
         });
     }
 
-    /** Offer the one action there is: the big button reads <code>label</code>, is enabled, and runs
-     *  <code>action</code> when pressed. The bar stops moving and the dropdown is free again. */
+    /** Main button: <code>label</code>, enabled, runs <code>action</code>. Bar determinate, dropdown enabled. */
     void ready(String label, Runnable action) {
         this.action = action;
         SwingUtilities.invokeLater(() -> {
@@ -172,8 +167,7 @@ final class Ui {
         });
     }
 
-    /** Nothing to play and nothing to retry: the big button is greyed out, the dropdown is free — picking
-     *  another channel is the way out. */
+    /** Main button disabled, dropdown enabled. */
     void idle() {
         action = null;
         SwingUtilities.invokeLater(() -> {
@@ -185,7 +179,7 @@ final class Ui {
         });
     }
 
-    /** Nothing to press while work is going on. */
+    /** Main button and dropdown disabled. */
     void busy() {
         action = null;
         SwingUtilities.invokeLater(() -> {
@@ -194,12 +188,12 @@ final class Ui {
         });
     }
 
-    /** Show a message and wait for the click; the window stays. */
+    /** Modal error dialog; blocks until dismissed. */
     void error(String message) {
         try {
             SwingUtilities.invokeAndWait(() -> JOptionPane.showMessageDialog(frame, message, frame.getTitle(), JOptionPane.ERROR_MESSAGE));
         } catch(InterruptedException | InvocationTargetException e) {
-            // nothing left to show it in
+            // event thread gone
         }
     }
 

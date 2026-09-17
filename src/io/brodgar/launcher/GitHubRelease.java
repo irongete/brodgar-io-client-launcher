@@ -20,38 +20,32 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * What the launcher asks GitHub. The releases of a repository come from the API's list — one call, no token,
- * with each release's <code>prerelease</code> flag — and the channel picks among them by version: the highest
- * <code>vMAJOR.MINOR.PATCH[-pre]</code>, a plain version above its own pre-releases, so <code>v0.1.0</code>
- * outranks <code>v0.1.0-beta.3</code>. Nothing here trusts the order GitHub lists in: a release edited long
- * after it was made would otherwise look new. Should the API be out of reach (a shared address past its
- * unauthenticated limit), the redirect <code>releases/latest</code> answers with — GitHub's own latest plain
- * release — stands in: for either channel when there is one; when there is none, the Release channel is told
- * so, while the Beta channel, which cannot tell a beta from nothing this way, is told GitHub is out of reach.
- * An asset is downloaded from the fixed <code>releases/download/&lt;tag&gt;/&lt;name&gt;</code> URL.
+ * GitHub releases API client. <code>GET /repos/{repo}/releases?per_page=100</code>, unauthenticated; the
+ * channel picks the highest <code>vMAJOR.MINOR.PATCH[-pre]</code> by {@link #compare} (a plain version above
+ * its pre-releases), ignoring API order. If the API call fails (rate limit, network), the fallback is the
+ * <code>Location</code> of <code>github.com/{repo}/releases/latest</code> — GitHub's latest non-prerelease —
+ * for either channel; with no such release, RELEASE gets {@link NoReleaseException}, BETA gets the API's
+ * <code>IOException</code> (the redirect cannot show a prerelease). Assets:
+ * <code>releases/download/{tag}/{name}</code>.
  */
 final class GitHubRelease {
     private GitHubRelease() {}
 
     private static final Duration CONNECT = Duration.ofSeconds(10);
-    /** How long a download may go without a byte before it is given up: the body has no timeout of its own, and
-     *  a stalled one would otherwise hold the launcher in "Downloading..." for good. */
+    /** Body read watchdog: no byte for this long fails the download (the request timeout covers headers only). */
     private static final Duration STALL = Duration.ofSeconds(60);
     private static final Pattern TAG = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]*)\"");
     private static final Pattern PRERELEASE = Pattern.compile("\"prerelease\"\\s*:\\s*(true|false)");
     private static final Pattern DRAFT = Pattern.compile("\"draft\"\\s*:\\s*(true|false)");
     private static final Pattern VERSION = Pattern.compile("v?(\\d+)\\.(\\d+)\\.(\\d+)(?:-([0-9A-Za-z.]+))?");
 
-    /** One release as the API lists it. */
+    /** <code>tag_name</code> and <code>prerelease</code> of one API release object. */
     record Release(String tag, boolean prerelease) {}
 
-    /** GitHub answered, and the channel has nothing: not a network failure, and nothing to retry — the
-     *  dropdown is the way out when the other channel has something, which {@link #beta} names. Nothing here
-     *  says anything about what is installed: that is the player's disk, not GitHub's answer. */
+    /** GitHub answered and the channel has no release. Not a network failure. */
     static final class NoReleaseException extends IOException {
         private static final long serialVersionUID = 1L;
-        /** The tag the Beta channel would install while the Release channel has nothing, or null: there is no
-         *  beta either, or the answer came off the fallback, which cannot see one. */
+        /** Highest prerelease tag while RELEASE has nothing; null if none, or if answered via the fallback. */
         final String beta;
 
         NoReleaseException(String message, String beta) {
@@ -60,10 +54,8 @@ final class GitHubRelease {
         }
     }
 
-    /** The tag the channel should have installed: the highest version the channel admits, or GitHub's own
-     *  latest plain release when the API cannot be asked. Without one, the Release channel has nothing to install
-     *  and hears so; the Beta channel might have a beta the redirect cannot show, so it hears the API is out of
-     *  reach — the installed client is offered, or a retry. */
+    /** Highest tag the channel admits, via the API; via {@link #latestTag} if the API fails. See the class
+     *  comment for the no-release cases. */
     static String newestTag(String repo, Channel channel) throws IOException, InterruptedException {
         List<Release> all;
         try {
@@ -80,8 +72,8 @@ final class GitHubRelease {
         return newest(all, channel, repo);
     }
 
-    /** The channel's pick among the releases listed: the highest version it admits. With none, the exception
-     *  names the highest of everything, which is then a beta the Release channel skipped — or nothing at all. */
+    /** Highest version-shaped tag the channel admits; {@link NoReleaseException} carrying the highest of all
+     *  (a prerelease RELEASE skipped, or null) if none. */
     static String newest(List<Release> all, Channel channel, String repo) throws NoReleaseException {
         Release best = null, any = null;
         for(Release r : all) {
@@ -100,7 +92,7 @@ final class GitHubRelease {
         return best.tag();
     }
 
-    /** The releases of <code>owner/repo</code>, drafts left out, as the API lists them (up to a hundred). */
+    /** Non-draft releases of <code>owner/repo</code> from the API, at most 100. */
     static List<Release> releases(String repo) throws IOException, InterruptedException {
         HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT).build();
         HttpRequest req = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/" + repo + "/releases?per_page=100"))
@@ -111,10 +103,9 @@ final class GitHubRelease {
         return parse(res.body());
     }
 
-    /** The releases in an API listing. A release object carries <code>tag_name</code>, then <code>draft</code>
-     *  and <code>prerelease</code>, before its assets; the keys are read in that order between one
-     *  <code>tag_name</code> and the next, and no nested object (an author, an asset) carries them. A quote
-     *  inside a JSON string is escaped, so the keys cannot be mistaken for text in a release's notes. */
+    /** Regex parse of the listing: per <code>tag_name</code>, the <code>draft</code> and <code>prerelease</code>
+     *  keys up to the next <code>tag_name</code>. Valid because a release object lists them before its assets,
+     *  no nested object has them, and JSON escapes quotes inside strings. */
     static List<Release> parse(String json) {
         List<Release> out = new ArrayList<>();
         Matcher tag = TAG.matcher(json);
@@ -137,9 +128,8 @@ final class GitHubRelease {
         return out;
     }
 
-    /** Version order over tags: numbers first, then a plain version above its pre-releases, then the
-     *  pre-release identifiers dot by dot (numbers as numbers, words as words, the shorter one lower). A tag that
-     *  is not a version is lowest. */
+    /** Semver order: MAJOR.MINOR.PATCH numerically; no pre-release > pre-release; pre-release identifiers
+     *  dot-wise (numeric, else lexical; shorter list lower). Non-version tags lowest. */
     static int compare(String a, String b) {
         Matcher ma = VERSION.matcher(a), mb = VERSION.matcher(b);
         boolean va = ma.matches(), vb = mb.matches();
@@ -165,11 +155,9 @@ final class GitHubRelease {
         return Integer.compare(ia.length, ib.length);
     }
 
-    /** GitHub's own latest plain release of <code>owner/repo</code>, off the redirect and with no API: the
-     *  fallback, and what a repository without the API in reach still answers. A repository with no plain release
-     *  (none at all, or pre-releases only) has no latest: GitHub then sends the releases page itself instead of a
-     *  <code>releases/tag/</code> one — a redirect to it today, the page outright once — and that is
-     *  {@link NoReleaseException}, not a failure. */
+    /** Tag from the <code>Location</code> of <code>github.com/{repo}/releases/latest</code> (no API). A
+     *  <code>Location</code> without <code>/releases/tag/</code>, or a 200 (the releases page), means no
+     *  non-prerelease exists: {@link NoReleaseException}. */
     static String latestTag(String repo) throws IOException, InterruptedException {
         HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).connectTimeout(CONNECT).build();
         HttpRequest req = HttpRequest.newBuilder(URI.create("https://github.com/" + repo + "/releases/latest"))
@@ -184,22 +172,19 @@ final class GitHubRelease {
         throw new IOException("unexpected answer from github.com/" + repo + " (HTTP " + res.statusCode() + ")");
     }
 
-    /** The version a tag names: the tag without its leading <code>v</code> — <code>0.1.0</code> for
-     *  <code>v0.1.0</code>. The release zips are named after it. */
+    /** Tag without its leading <code>v</code>. */
     static String version(String tag) {
         return tag.startsWith("v") ? tag.substring(1) : tag;
     }
 
-    /** Where <code>asset</code> of the release tagged <code>tag</code> is downloaded from: the fixed
-     *  <code>releases/download/&lt;tag&gt;/&lt;asset&gt;</code> URL. */
+    /** <code>https://github.com/{repo}/releases/download/{tag}/{asset}</code>. */
     static String assetUrl(String repo, String tag, String asset) {
         return "https://github.com/" + repo + "/releases/download/" + tag + "/" + asset;
     }
 
-    /** Download <code>url</code> to <code>to</code>, reporting the fraction done (or -1 while the size is unknown).
-     *  The request's timeout covers the headers alone; the body is read as it comes, with a watchdog that gives
-     *  the download up after {@link #STALL} without a byte, an ordinary failure to the caller. */
-    @SuppressWarnings("try")   // the watchdog closes the stream on purpose, from its own thread
+    /** Download <code>url</code> to <code>to</code>; <code>progress</code> gets the fraction done, -1 without
+     *  <code>content-length</code>. Fails with <code>IOException</code> after {@link #STALL} without a byte. */
+    @SuppressWarnings("try")   // the watchdog thread closes the stream
     static void download(String url, Path to, DoubleConsumer progress) throws IOException, InterruptedException {
         HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT).build();
         HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(STALL).GET().build();
@@ -225,7 +210,7 @@ final class GitHubRelease {
                     stalled.set(true);
                     in.close();
                 } catch(InterruptedException | IOException e) {
-                    // the download is over, or the stream would not close: nothing left to watch
+                    // interrupted: the download ended
                 }
             }, "download-watchdog");
             watchdog.setDaemon(true);
@@ -243,9 +228,9 @@ final class GitHubRelease {
             }
         } catch(IOException e) {
             try {
-                Files.deleteIfExists(part);     // of no use without a resume; what a closed window leaves, tidy() takes
+                Files.deleteIfExists(part);     // no resume; ClientInstall.tidy() takes what is left
             } catch(IOException held) {
-                // the next download truncates it
+                // overwritten by the next download
             }
             throw stalled.get() ? new IOException("no data for " + STALL.toSeconds() + " seconds", e) : e;
         }

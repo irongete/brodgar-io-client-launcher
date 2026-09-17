@@ -8,63 +8,59 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 /**
- * <code>launcher.properties</code>: written with its defaults the first time, read every time. What the window
- * changes — the channel dropdown, the two checkboxes, the Options dialog — is written back in place, one
- * <code>key=value</code> line each, the rest of the file left as the player has it.
+ * <code>launcher.properties</code>: created from {@link #DEFAULTS} if absent, loaded at start. Each change is
+ * written back at once as one <code>key=value</code> line ({@link #writeLine}); other lines are kept.
  */
 public final class Settings {
     private static final String DEFAULTS = """
-        # Brodgar.io launcher settings. Delete a line to get its default back. The Options button edits
-        # the ones that shape how the game is started.
+        # Brodgar.io launcher settings. A missing key takes its default. See README.md, "Settings".
 
-        # Memory the game is given, e.g. 512m, 2g, 4g. It is reserved when the game starts (-Xms = -Xmx).
+        # -Xms<heap> -Xmx<heap>
         heap=2g
 
-        # true: touch all of that memory when the game starts, rather than page by page as it is first used.
+        # -XX:+AlwaysPreTouch
         heap.pretouch=true
 
-        # How the game frees memory it no longer uses -- zgc: concurrently, while the game keeps running;
-        # g1: Java's default, in short stops.
+        # zgc: -XX:+UseZGC; g1: JVM default
         gc=zgc
 
-        # true: let Windows scale the game window on a high-DPI screen; false: the game draws at 1:1 and
-        # scales its interface itself.
+        # false: -Dsun.java2d.uiScale.enabled=false
         ui.scale=false
 
-        # When a server has both kinds of address -- system: as Windows prefers; false: IPv4 first;
-        # true: IPv6 first.
+        # -Djava.net.preferIPv6Addresses=<system|true|false>
         ipv6=system
 
-        # Extra options for Java when the game starts, space-separated.
+        # extra JVM arguments, space-separated
         java.opts=
 
-        # Which releases to install -- release: plain releases only; beta: pre-releases too, the newest of
-        # everything. The launcher's dropdown, remembered here.
+        # release: non-prerelease tags only; beta: all tags
         channel=beta
 
-        # true: start the game in a command window (java.exe) that shows what it prints and stays open when
-        # the game ends in an error -- the way to see what went wrong; false: no window, and what the game
-        # printed is in client.log. The launcher's checkbox, remembered here.
+        # true: java.exe in a cmd window; false: javaw.exe, output to client.log
         console=false
 
-        # Read the game's resources through the brodgar.io cache proxy instead of the game's own server:
-        # the launcher's checkbox, remembered here, and the proxy's address.
+        # haven.resurl in client/haven-config.properties := resource.proxy ? resource.proxy.url : resource.url
         resource.proxy=false
+        resource.url=https://game.havenandhearth.com/res/
         resource.proxy.url=http://brodgar.io/res/
 
-        # false: never look for a release -- the launcher's own or the game's -- and offer whatever is installed.
+        # haven.addondir in client/haven-config.properties; empty: line removed (client default client/addons)
+        addons.dir=
+
+        # false: no release lookup for the launcher or the client
         check.updates=true
 
-        # Where the client's releases are, as owner/repo on GitHub, and the name its zip starts with.
+        # GitHub owner/repo of the client releases; asset name = <asset.prefix><version>.zip
         repo=irongete/brodgar-io-client
         asset.prefix=brodgar-io-client-
 
-        # Where the launcher's own releases are: it keeps itself at the newest one on the channel, as it keeps
-        # the client.
+        # GitHub owner/repo of the launcher releases
         launcher.repo=irongete/brodgar-io-client-launcher
         """;
 
@@ -75,9 +71,8 @@ public final class Settings {
         this.file = file;
     }
 
-    /** The settings in <code>file</code>, which is first written with the defaults when there is none — unless
-     *  <code>create</code> is off, as it is for a check run, which touches nothing: the defaults then simply
-     *  stand. The file is UTF-8, as it is written. */
+    /** Load <code>file</code> (UTF-8). If absent and <code>create</code>, write {@link #DEFAULTS} first;
+     *  <code>--check</code> passes false. */
     static Settings load(Path file, boolean create) {
         Settings s = new Settings(file);
         try {
@@ -89,7 +84,7 @@ public final class Settings {
                 }
             }
         } catch(IOException e) {
-            // unreadable or unwritable: the defaults below stand
+            // unreadable or unwritable: defaults
         }
         return s;
     }
@@ -111,67 +106,106 @@ public final class Settings {
     Channel channel()         {return Channel.of(get("channel", "beta"), Channel.BETA);}
     boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
+    String resourceUrl()      {return get("resource.url", "https://game.havenandhearth.com/res/");}
     String resourceProxyUrl() {return get("resource.proxy.url", "http://brodgar.io/res/");}
+    String addonsDir()        {return get("addons.dir", "");}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
 
-    /** Everything that shapes the game's command line, as it stands. */
+    /** {@link Launch} from the current values. */
     Launch launch() {
-        return new Launch(heap(), pretouch(), gc(), uiScale(), ipv6(), split(javaOptsText()), resourceProxy(), resourceProxyUrl());
+        return new Launch(heap(), pretouch(), gc(), uiScale(), ipv6(), split(javaOptsText()));
     }
 
-    /** The parts of the game's command line — what the settings hold, or what the Options dialog is showing. */
-    record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, List<String> opts, boolean proxy, String proxyUrl) {}
+    /** Inputs of {@link Launcher#command}. */
+    record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, List<String> opts) {}
 
-    /** Space-separated options as a list; nothing from an empty or blank string. */
+    /** Lines the launcher owns in <code>client/haven-config.properties</code>, in write order:
+     *  <code>haven.resurl</code>, <code>haven.addondir</code>. A null value means the line is removed. */
+    Map<String, String> clientConfig() {
+        return clientConfig(resourceProxy(), resourceUrl(), resourceProxyUrl(), addonsDir());
+    }
+
+    /** {@link #clientConfig()} from explicit values. */
+    static Map<String, String> clientConfig(boolean proxy, String url, String proxyUrl, String addonsDir) {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("haven.resurl", proxy ? proxyUrl : url);
+        m.put("haven.addondir", addonsDir.isBlank() ? null : addonsDir.trim());
+        return m;
+    }
+
+    /** <code>key=value</code> per non-null entry, one per line; for <code>--check</code>. */
+    static String lines(Map<String, String> config) {
+        StringBuilder b = new StringBuilder();
+        for(Map.Entry<String, String> e : config.entrySet()) {
+            if(e.getValue() == null)
+                continue;
+            b.append(b.length() > 0 ? System.lineSeparator() : "").append(e.getKey()).append('=').append(e.getValue());
+        }
+        return b.toString();
+    }
+
+    /** Split on whitespace; empty list for blank. */
     static List<String> split(String opts) {
         String v = (opts == null) ? "" : opts.trim();
         return v.isEmpty() ? List.of() : Arrays.asList(v.split("\\s+"));
     }
 
-    /** The proxy checkbox: remembered at once, so the next run starts where this one left it. */
+    /** Write <code>resource.proxy</code>. */
     void resourceProxy(boolean on) {
         set("resource.proxy", String.valueOf(on));
     }
 
-    /** The console checkbox, remembered the same way. */
+    /** Write <code>console</code>. */
     void console(boolean on) {
         set("console", String.valueOf(on));
     }
 
-    /** The dropdown, remembered the same way. */
+    /** Write <code>channel</code>. */
     void channel(Channel c) {
         set("channel", c.key);
     }
 
-    /** One setting, kept in memory and in the file — what the Options dialog writes on OK. */
+    /** Set in memory and write to the file. */
     void set(String key, String value) {
         p.setProperty(key, value);
         write(key, value);
     }
 
-    /** Set <code>key=value</code> on its own line — replacing the line that holds it, or appended — and leave
-     *  every other line, comments included, as it is. The value is written the way {@link Properties#load} reads
-     *  it back: a backslash is an escape to it, so each one is doubled (a Windows path in the Java options would
-     *  otherwise lose its separators on the next run); nothing else in a one-line value is special. A file that
-     *  cannot be written keeps the value for this run alone. */
+    /** {@link #writeLine} on this file; an <code>IOException</code> is printed to stderr and the value holds
+     *  in memory only. */
     private void write(String key, String value) {
         try {
-            List<String> lines = Files.exists(file) ? new ArrayList<>(Files.readAllLines(file)) : new ArrayList<>();
-            String line = key + "=" + value.replace("\\", "\\\\");
-            boolean done = false;
-            for(int i = 0; i < lines.size(); i++) {
-                String t = lines.get(i).stripLeading();
-                if(t.startsWith(key + "=") || t.startsWith(key + " ") || t.startsWith(key + ":")) {
-                    lines.set(i, line);
-                    done = true;
-                    break;
-                }
-            }
-            if(!done)
-                lines.add(line);
-            Files.write(file, lines);
+            writeLine(file, key, value);
         } catch(IOException e) {
-            // the setting stands for this run
+            System.err.println(file + " could not be written (" + key + "): " + e);
         }
+    }
+
+    /** Replace the first line starting with <code>key=</code>, <code>key </code> or <code>key:</code> by
+     *  <code>key=value</code>, or append it; other lines are kept; a missing file is created. Null value:
+     *  remove that line (no write if absent). Backslashes in the value are doubled for {@link Properties#load}.
+     *  Used for <code>launcher.properties</code> and for <code>client/haven-config.properties</code>. */
+    static void writeLine(Path file, String key, String value) throws IOException {
+        List<String> lines = Files.exists(file) ? new ArrayList<>(Files.readAllLines(file)) : new ArrayList<>();
+        int at = -1;
+        for(int i = 0; i < lines.size(); i++) {
+            String t = lines.get(i).stripLeading();
+            if(t.startsWith(key + "=") || t.startsWith(key + " ") || t.startsWith(key + ":")) {
+                at = i;
+                break;
+            }
+        }
+        if(value == null) {
+            if(at < 0)
+                return;
+            lines.remove(at);
+        } else {
+            String line = key + "=" + value.replace("\\", "\\\\");
+            if(at < 0)
+                lines.add(line);
+            else
+                lines.set(at, line);
+        }
+        Files.write(file, lines);
     }
 }

@@ -11,15 +11,15 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * A release zip unpacked over a folder: what the zip carries is written, replacing what is there, and nothing
- * else is touched. A zip whose every entry sits under one top-level folder is unpacked from inside it, so
- * <code>brodgar-io-client-0.1.0/hafen.jar</code> and a bare <code>hafen.jar</code> land in the same place. An
- * entry that would land outside the folder fails the whole unpack.
+ * Zip extraction over a folder: entries are written with <code>REPLACE_EXISTING</code>; existing files not in
+ * the zip are kept. If every entry is under one top-level folder, that folder is stripped
+ * (<code>brodgar-io-client-0.1.0/hafen.jar</code> → <code>hafen.jar</code>). An entry resolving outside the
+ * target (absolute, backslash, <code>..</code>) throws <code>IOException</code>.
  */
 final class Unzip {
     private Unzip() {}
 
-    /** Unpack <code>zip</code> into <code>into</code>, which is created when it is not there. */
+    /** Extract <code>zip</code> into <code>into</code> (created if missing). */
     static void unpack(Path zip, Path into) throws IOException {
         Files.createDirectories(into);
         try(ZipFile zf = new ZipFile(zip.toFile())) {
@@ -52,14 +52,14 @@ final class Unzip {
         }
     }
 
-    /** The one folder every entry is under (with its trailing slash), or "" when the entries sit at the root. */
+    /** Common top-level folder of all entries, with trailing slash; "" if none. */
     private static String commonRoot(ZipFile zf) {
         String root = null;
         for(Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements();) {
             String name = en.nextElement().getName();
             int slash = name.indexOf('/');
             if(slash < 0)
-                return "";                      // a file at the root: nothing to strip
+                return "";                      // an entry at the root
             String top = name.substring(0, slash + 1);
             if(root == null)
                 root = top;

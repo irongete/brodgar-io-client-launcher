@@ -26,25 +26,20 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * The launcher's updater: a small program of its own, started by a launcher that found a newer release of
- * itself, which then exits. It shows a window with a bar, waits for the launcher to be gone, downloads the
- * release zip into <code>update/</code>, unpacks it there, puts <code>launcher.jar</code> and
- * <code>run.bat</code> in place — each in one atomic move, so a failure leaves the old file rather than none —
- * moves the release's runtime to <code>runtime.new/</code>, starts the launcher and exits.
+ * Launcher self-update, a separate process. {@link #launch} copies <code>launcher.jar</code> to
+ * <code>update/updater.jar</code> (the running jar is locked) and starts this class from it; the launcher then
+ * exits. {@link #main}: wait for the launcher pid, download the release zip into <code>update/</code>, unpack,
+ * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code> and
+ * <code>launcher.jar</code> into <code>home</code>, start the launcher, exit. <code>run.bat</code> swaps
+ * <code>runtime.new/</code> in on a later start (the runtime cannot be replaced while this process and the game
+ * run on it). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
  *
- * <p>Two things it cannot do. It cannot run from <code>launcher.jar</code>, which Java holds open for as long as
- * it runs, so the launcher starts it from a copy, <code>update/updater.jar</code>; the launcher removes
- * <code>update/</code> when it next starts. And it cannot replace <code>runtime/</code>, which it runs on — as
- * the game does, possibly for hours — so <code>run.bat</code> swaps <code>runtime.new/</code> in at the next
- * start, when nothing runs on the runtime. Until then the new launcher runs on the old runtime, which it can.
- *
- * <p>When anything fails, a dialog says so, and the launcher as it stands is started with
- * <code>--no-launcher-update</code>, so that one run gets to the game; the next start tries again. The client is
- * never touched.
+ * <p>On failure: error dialog, then the current launcher is started with <code>--no-launcher-update</code>.
+ * <code>client/</code> is never touched.
  */
 public final class Updater {
     private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** The release asset, as build.xml names it: <code>brodgar.io-client-launcher-&lt;version&gt;-windows.zip</code>. */
+    /** Asset name parts, as build.xml: <code>brodgar.io-client-launcher-&lt;version&gt;-windows.zip</code>. */
     private static final String ASSET_PREFIX = "brodgar.io-client-launcher-", ASSET_SUFFIX = "-windows.zip";
 
     private final Path home;
@@ -57,7 +52,7 @@ public final class Updater {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch(Exception e) {
-            // the cross-platform look is fine too
+            // cross-platform look and feel then
         }
         frame = new JFrame("Brodgar.io launcher " + version);
         status = new JLabel("Waiting for the launcher to close...");
@@ -80,9 +75,7 @@ public final class Updater {
         frame.setVisible(true);
     }
 
-    /** <code>Updater &lt;home&gt; &lt;pid&gt; &lt;version&gt; &lt;url&gt;</code>: replace the launcher in
-     *  <code>home</code>, once the process <code>pid</code> is gone, with the <code>version</code> at
-     *  <code>url</code>. */
+    /** <code>Updater &lt;home&gt; &lt;pid&gt; &lt;version&gt; &lt;url&gt;</code>. */
     public static void main(String[] args) {
         if(args.length != 4) {
             System.err.println("usage: Updater <home> <pid> <version> <url>");
@@ -106,8 +99,8 @@ public final class Updater {
         System.exit(0);
     }
 
-    /** The update itself: the release downloaded and unpacked into <code>update/</code>, then the jar and the
-     *  bat put in place and the runtime staged as <code>runtime.new/</code>. */
+    /** Wait for <code>pid</code>; download and unpack into <code>update/</code>; verify <code>launcher.jar</code>
+     *  and <code>runtime/bin/javaw.exe</code> are there; move runtime, bat, jar into place. */
     private void install(long pid, String version, String url) throws IOException, InterruptedException {
         waitFor(pid);
         Path dir = home.resolve(STAGING);
@@ -126,8 +119,7 @@ public final class Updater {
         Files.move(dir.resolve(JAR), home.resolve(JAR), StandardCopyOption.ATOMIC_MOVE);
     }
 
-    /** Wait for the launcher <code>pid</code> to be gone: it exits right after starting this updater, so a minute
-     *  is a launcher that is stuck. */
+    /** Wait up to 60 s for <code>pid</code> to exit; <code>IOException</code> after that. */
     private static void waitFor(long pid) throws IOException, InterruptedException {
         try {
             ProcessHandle.of(pid).map(ProcessHandle::onExit).orElse(CompletableFuture.completedFuture(null)).get(60, TimeUnit.SECONDS);
@@ -136,9 +128,8 @@ public final class Updater {
         }
     }
 
-    /** Start the launcher in <code>home</code> on the runtime there; <code>asIs</code> tells it not to look for a
-     *  newer launcher this once. A launcher that cannot be started is said so in a dialog: the window is the last
-     *  thing there is. */
+    /** <code>runtime/bin/javaw.exe -jar launcher.jar [--no-launcher-update]</code> in <code>home</code>; an
+     *  <code>IOException</code> is shown in a dialog. */
     private void start(boolean asIs) {
         List<String> cmd = new ArrayList<>(List.of(home.resolve(RUNTIME).resolve("bin").resolve("javaw.exe").toString(), "-jar", home.resolve(JAR).toString()));
         if(asIs)
@@ -152,7 +143,7 @@ public final class Updater {
         }
     }
 
-    /** What went wrong, in a line: the message, or the exception when it has none. */
+    /** <code>getMessage()</code>, or <code>toString()</code> when null. */
     private static String reason(Exception e) {
         return (e.getMessage() != null) ? e.getMessage() : e.toString();
     }
@@ -161,7 +152,7 @@ public final class Updater {
         SwingUtilities.invokeLater(() -> status.setText(s));
     }
 
-    /** A fraction in 0..1, or a negative number while the size is unknown. */
+    /** Fraction in 0..1; negative = indeterminate. */
     private void progress(double fraction) {
         SwingUtilities.invokeLater(() -> {
             bar.setIndeterminate(fraction < 0);
@@ -170,16 +161,15 @@ public final class Updater {
         });
     }
 
-    // ---- the launcher's side ---------------------------------------------------------------------------------
+    // ---- called by the launcher --------------------------------------------------------------------------------
 
-    /** The zip a release carries: <code>brodgar.io-client-launcher-1.1.0-windows.zip</code> under <code>v1.1.0</code>. */
+    /** Asset name for <code>tag</code>: <code>brodgar.io-client-launcher-1.1.0-windows.zip</code> for <code>v1.1.0</code>. */
     static String asset(String tag) {
         return ASSET_PREFIX + GitHubRelease.version(tag) + ASSET_SUFFIX;
     }
 
-    /** Start an updater for the launcher in <code>home</code>, on a copy of its jar in <code>update/</code>, to
-     *  replace this process with the <code>version</code> at <code>url</code> — which this process then leaves
-     *  to it by exiting. An updater gone within a second did not start, and that is a failure here. */
+    /** Copy <code>launcher.jar</code> to <code>update/updater.jar</code> and start {@link #main} from it with
+     *  this process's pid. An updater that exits within 1 s is an <code>IOException</code>. The caller exits. */
     static void launch(Path home, String version, String url) throws IOException, InterruptedException {
         Path dir = home.resolve(STAGING);
         deleteTree(dir);
@@ -193,8 +183,8 @@ public final class Updater {
             throw new IOException("the updater exited at once (code " + p.exitValue() + ")");
     }
 
-    /** Remove <code>update/</code>, where an updater ran: the one that started this launcher may be letting go
-     *  of its jar still, so a few seconds are given; what is left then waits for the next start. */
+    /** Delete <code>update/</code>, retrying for 5 s (the updater that started this launcher may still hold its
+     *  jar); what remains waits for the next start. */
     static void tidy(Path home) {
         Path dir = home.resolve(STAGING);
         for(int i = 0; (i < 20) && Files.exists(dir); i++) {
@@ -211,7 +201,7 @@ public final class Updater {
         }
     }
 
-    /** Remove the folder <code>dir</code> and everything in it; nothing to do when it is not there. */
+    /** Recursive delete; no-op if absent. */
     private static void deleteTree(Path dir) throws IOException {
         if(!Files.exists(dir))
             return;

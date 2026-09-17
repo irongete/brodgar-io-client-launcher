@@ -12,40 +12,26 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The Brodgar.io client launcher: keeps <code>client/</code> at the newest GitHub release of the client on the
- * chosen channel and starts it, on the Play button, on the runtime that ships beside this launcher.
- *
- * <p>Everything lives in one folder, the one <code>launcher.jar</code> is in:
+ * Main class. Keeps <code>client/</code> at the channel's newest GitHub release and starts it on
+ * <code>runtime/</code>. Home is the folder of <code>launcher.jar</code>, or <code>-Dlauncher.home</code>:
  * <pre>
- *   run.bat                starts the launcher on the runtime below
+ *   run.bat                starts launcher.jar on runtime/
  *   launcher.jar
- *   runtime/               the Java runtime (jlink), the launcher's and the client's
- *   client/                the client release: hafen.jar, lib/, the resource jars, addons/
- *   client/savedata/       the player's own; never written by the launcher
+ *   runtime/               jlink runtime; runs the launcher and the client
+ *   client/                the client release: hafen.jar, lib/, resource jars, addons/, haven-config.properties
+ *   client/savedata/       client data; never written by the launcher
  *   client/installed-version
- *   launcher.properties    settings, written with defaults on the first run
- *   client.log             what the client printed on its last run
+ *   launcher.properties    {@link Settings}; created with defaults on first run
+ *   client.log             stdout/stderr of the last client run
  * </pre>
  *
- * <p>The window opens at once; the release check and the download run behind it, and the big button becomes
- * <b>Play</b> when the channel's newest release is installed — greyed out while the channel has nothing,
- * <b>Retry</b> when nothing is installed and the download failed. The dropdown is the channel — <b>Release</b>
- * installs plain releases, <b>Beta</b> the newest of everything, pre-releases included — and picking one looks
- * again at once. One checkbox is the console: off, the client starts without a window of its own and what it
- * prints goes to <code>client.log</code>; on, it runs in a command window that shows what it prints and stays
- * open when it ends in an error. The other is the brodgar.io resource cache proxy: off, the client reads the
- * game's own resource server (what its shipped haven-config.properties names); on, it is started with
- * <code>-U</code> and the proxy's URL. Options opens the {@link OptionsDialog}; Open client folder opens
- * <code>client/</code> in the file manager. Everything is remembered in
- * <code>launcher.properties</code>. Run with <code>--check</code> it resolves the channel's newest release and
- * prints what it would download and how it would start the client, and exits without touching anything or
- * opening a window.
- *
- * <p>Before the client, the launcher looks at its own releases and, when a newer one is out on the channel,
- * starts the {@link Updater} and exits: the updater downloads the release, puts it in place and starts the
- * launcher again — with <code>--no-launcher-update</code> when it could not, so that run does not try again.
- * Only a launcher as shipped does this, <code>launcher.jar</code> on the runtime beside it; a development run
- * has nothing to replace.
+ * <p>Start: window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped launchers only), {@link #update}
+ * (release check, download, unpack), {@link Ui#ready} with Play or Retry, or {@link Ui#idle}. Play:
+ * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
+ * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written on the proxy checkbox and when Options
+ * closes — an unpacked release restores the zip's copy), then {@link #command} runs with cwd <code>client/</code>
+ * and the launcher exits. <code>--check</code>: resolve and print, no window, no writes.
+ * <code>--no-launcher-update</code>: skip {@link #updateSelf}.
  */
 public final class Launcher {
     private final Path home;
@@ -53,9 +39,9 @@ public final class Launcher {
     private final ClientInstall client;
     private final Path javaw;
     private final Ui ui;
-    /** Whether the launcher runs as shipped, and so may replace itself; false in a development run. */
+    /** {@link #shipped(Path)}: self-update allowed. */
     private final boolean shipped;
-    /** <code>--no-launcher-update</code>: the updater that started this run failed, and once is enough. */
+    /** <code>--no-launcher-update</code> was given. */
     private final boolean noLauncherUpdate;
 
     private Launcher(Path home, Settings settings, ClientInstall client, Path javaw, Ui ui, boolean shipped, boolean noLauncherUpdate) {
@@ -81,39 +67,52 @@ public final class Launcher {
             return;
         }
         Launcher[] l = new Launcher[1];
-        Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), () -> l[0].options(), () -> l[0].clientFolder());
+        Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), on -> l[0].proxy(on), () -> l[0].options(), () -> l[0].clientFolder());
         l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
 
-    /** What the release check left the launcher with. */
+    /** Result of {@link #update}. */
     private enum Outcome {
-        /** The channel's newest release is installed. */
+        /** Newest release installed: Play. */
         READY,
-        /** GitHub answered and the channel has nothing: nothing to play, nothing to retry. */
+        /** GitHub answered, channel empty: button disabled. */
         NO_RELEASE,
-        /** GitHub could not be reached or the download failed, and a client is installed: play that. */
+        /** GitHub or download failed, a client is installed: Play. */
         INSTALLED_ANYWAY,
-        /** GitHub could not be reached or the download failed, and nothing is installed: retry. */
+        /** GitHub or download failed, nothing installed: Retry. */
         NOTHING,
     }
 
-    /** The dropdown: remember the channel and look for its newest release at once. Only reachable while no
-     *  work is going on, since the window holds the dropdown until the check is over. */
+    /** Dropdown callback: save, re-run {@link #prepare}. Disabled while work runs. */
     private void channel(Channel c) {
         settings.channel(c);
         new Thread(this::prepare, "launcher-update").start();
     }
 
-    /** The Options button, on the event thread: modal, so nothing else happens while it is open. The preview
-     *  starts with the executable Play would use, java.exe while the console checkbox is on. */
-    private void options() {
-        OptionsDialog.show(ui.frame(), settings, exe(javaw, settings));
+    /** Proxy checkbox callback: save, write the client's file. */
+    private void proxy(boolean on) {
+        settings.resourceProxy(on);
+        configure();
     }
 
-    /** The Open client folder button, on the event thread: <code>client/</code> in the file manager — where
-     *  <code>savedata/</code> and <code>addons/</code> are. Before anything is installed there is no such folder,
-     *  and the dialog says so (on the event thread itself: {@link Ui#error} waits for the event thread). */
+    /** Options button callback: modal dialog, then write the client's file. */
+    private void options() {
+        OptionsDialog.show(ui.frame(), settings, exe(javaw, settings));
+        configure();
+    }
+
+    /** {@link ClientInstall#configure} from the settings; an <code>IOException</code> goes to the status line. */
+    private void configure() {
+        try {
+            client.configure(settings.clientConfig());
+        } catch(IOException e) {
+            ui.status(client.config().getFileName() + " could not be written: " + e.getMessage());
+        }
+    }
+
+    /** Open client folder callback: <code>Desktop.open(client/)</code>; error dialog if absent (directly, on the
+     *  event thread: {@link Ui#error} would deadlock). */
     private void clientFolder() {
         Path dir = client.dir();
         try {
@@ -125,9 +124,8 @@ public final class Launcher {
         }
     }
 
-    /** Bring the launcher, then the client, up to date, and offer what there is. The title names the client
-     *  only while Play offers it: what sits in <code>client/</code> without a channel behind it is not the
-     *  launcher's to announce. */
+    /** {@link #updateSelf}, {@link #update}, then the button state per {@link Outcome}. The title carries the
+     *  client version only when Play is offered. */
     private void prepare() {
         ui.busy();
         Outcome o;
@@ -146,10 +144,9 @@ public final class Launcher {
         }
     }
 
-    /** Bring this launcher up to date with its own releases on the channel: when a newer one is out, start the
-     *  updater and exit — it does the rest and starts the launcher again. Back when there is nothing to do, or
-     *  the updater could not be started, which the status line says; GitHub out of reach is left to the client's
-     *  check, which follows and says so. */
+    /** Shipped launchers with <code>check.updates</code> and no <code>--no-launcher-update</code>: if
+     *  {@link #newerLauncher} finds a tag, {@link Updater#launch} and <code>System.exit(0)</code>. A failed
+     *  launch is reported in the status line; a failed lookup is left to {@link #update} to report. */
     private void updateSelf() {
         if(!shipped)
             return;
@@ -178,8 +175,8 @@ public final class Launcher {
         System.exit(0);
     }
 
-    /** The tag of the newest launcher release on the channel when it is newer than this launcher, else null:
-     *  this launcher is the newest, or newer (a beta on the Release channel), or the channel has nothing. */
+    /** Newest launcher tag on the channel if {@link GitHubRelease#compare} puts it above {@link #version()};
+     *  else null. */
     private static String newerLauncher(Settings settings) throws IOException, InterruptedException {
         String tag;
         try {
@@ -190,8 +187,7 @@ public final class Launcher {
         return (GitHubRelease.compare(tag, version()) > 0) ? tag : null;
     }
 
-    /** Fetch the channel's newest release when it differs from the installed one, saying in the status line
-     *  what happened. */
+    /** Release check and install; every branch sets the status line. */
     private Outcome update() {
         client.tidy();
         String installed = client.installedVersion();
@@ -207,9 +203,7 @@ public final class Launcher {
             ui.status("Looking for the newest " + kind + "...");
             latest = GitHubRelease.newestTag(settings.repo(), channel);
         } catch(GitHubRelease.NoReleaseException e) {
-            // Only what GitHub answered: the Beta channel is everything, so nothing there is nothing at all; the
-            // Release channel may have skipped a beta, named when the API showed it. Nothing about what is
-            // installed, which no channel is known to have.
+            // BETA empty = nothing published at all; RELEASE empty may have skipped a beta (e.beta, API only)
             ui.status((channel == Channel.BETA) ? "Nothing has been published yet."
                       : (e.beta == null) ? "No release has been published yet."
                       : "No release has been published yet — " + e.beta + " is on the Beta channel.");
@@ -241,13 +235,14 @@ public final class Launcher {
         }
     }
 
-    /** The Play button: start the client and leave, unless it dies at once, in which case say so and stay. With
-     *  the console on, a client that dies at once has its window kept open by the pause, so the process here
-     *  lives on and the launcher leaves as usual: the error is on that screen. */
+    /** Play: configure the client's file, {@link #start}, exit — unless the process ends within 3 s: error
+     *  dialog with the exit code and the log tail, stay. With the console on, the <code>pause</code> keeps the
+     *  process alive, so the error is shown there instead. */
     private void play() {
         ui.busy();
         ui.status("Starting the client...");
         try {
+            client.configure(settings.clientConfig());
             Process p = start();
             if(p.waitFor(3, TimeUnit.SECONDS)) {
                 ui.error("The client exited at once (code " + p.exitValue() + ").\n\n" + tail(home.resolve("client.log"), 12));
@@ -264,9 +259,8 @@ public final class Launcher {
         }
     }
 
-    /** The client as a process: on javaw.exe with its output in <code>client.log</code>, or, with the console
-     *  checkbox on, in a command window of its own — the log then says so, and takes what cmd itself may have
-     *  to say (nothing, unless the window could not be opened). */
+    /** Start the client in <code>client/</code>: {@link #command} with stdout/stderr to <code>client.log</code>,
+     *  or with the console on {@link #consoleCommand}, the log then holding a note and cmd's own output. */
     private Process start() throws IOException {
         Path log = home.resolve("client.log");
         ProcessBuilder pb = new ProcessBuilder().directory(client.dir().toFile()).redirectErrorStream(true);
@@ -279,24 +273,18 @@ public final class Launcher {
         return pb.start();
     }
 
-    /** The client's command line as the settings stand, on the executable Play would use. */
+    /** {@link #command(Path, Settings.Launch)} on {@link #exe}. */
     static List<String> command(Path javaw, Settings s) {
         return command(exe(javaw, s), s.launch());
     }
 
     /**
-     * The client's command line in a command window of its own, for the console checkbox. cmd's
-     * <code>start</code> opens the window (titled, waited for, in <code>dir</code>) and runs a second cmd in it,
-     * which runs the client on <code>java.exe</code> — the launcher that writes to a console, where javaw.exe
-     * has none — and pauses when it ends in an error, so what went wrong stays on screen. The outer cmd waits
-     * for the window, so the process returned stands for the client's just as the silent one does.
-     *
-     * <p>Two things keep cmd from misreading the line. The client's <code>||</code> is written <code>^|^|</code>
-     * so the outer cmd passes it on rather than acting on it. And java.exe is named by a path relative to
-     * <code>dir</code> when it can be (<code>..\runtime\bin\java.exe</code>, always in the shipped folder), so
-     * that nothing after <code>cmd /c</code> needs quoting: a quoted path with a space and a parenthesis, as in
-     * <code>Brodgar (2)</code>, would lose its quotes to cmd's quote-stripping rule. Only a Java elsewhere
-     * (development, a JDK on another drive) is written whole, quoted when it has a space.
+     * <code>cmd /c start "Brodgar.io client" /wait /D dir cmd /c java.exe ...args ^|^| pause</code>: the client
+     * on <code>java.exe</code> in its own console window; the outer cmd waits, so the returned process ends
+     * with the client. <code>^|^|</code> keeps the outer cmd from evaluating <code>||</code>. java.exe is
+     * given relative to <code>dir</code> (<code>..\runtime\bin\java.exe</code>) so no quoting is needed after
+     * <code>cmd /c</code> — cmd's quote-stripping rule breaks a quoted path with a space and a parenthesis;
+     * only a Java on another drive is absolute, quoted if it has a space.
      */
     static List<String> consoleCommand(Path javaw, Settings s, Path dir) {
         Path java = consoleJava(javaw);
@@ -304,38 +292,36 @@ public final class Launcher {
         try {
             exe = dir.toAbsolutePath().relativize(java.toAbsolutePath()).toString();
         } catch(IllegalArgumentException e) {
-            exe = java.toString();                                  // another drive: no relative path to it
+            exe = java.toString();                                  // another drive: no relative path
         }
         if(exe.indexOf(' ') >= 0)
             exe = "\"" + exe + "\"";
         List<String> client = command(java, s.launch());
         List<String> cmd = new ArrayList<>(List.of("cmd.exe", "/c", "start", "\"Brodgar.io client\"", "/wait", "/D", "\"" + dir + "\"", "cmd.exe", "/c", exe));
-        cmd.addAll(client.subList(1, client.size()));           // the same command, java.exe named as above
+        cmd.addAll(client.subList(1, client.size()));           // the arguments of command(), java.exe as above
         cmd.addAll(List.of("^|^|", "pause"));
         return cmd;
     }
 
-    /** The executable the settings start the client with: java.exe while the console checkbox is on, else javaw. */
+    /** <code>java.exe</code> with the console on, else <code>javaw</code>. */
     static Path exe(Path javaw, Settings s) {
         return s.console() ? consoleJava(javaw) : javaw;
     }
 
-    /** The console launcher beside a javaw: <code>java.exe</code> in the same <code>bin</code>, or javaw itself
-     *  when there is none. */
+    /** <code>java.exe</code> beside <code>javaw</code>, or <code>javaw</code> itself if absent. */
     static Path consoleJava(Path javaw) {
         Path java = javaw.resolveSibling("java.exe");
         return Files.exists(java) ? java : javaw;
     }
 
     /**
-     * The client's command line from its parts — what the Options dialog previews and what Play runs. The
-     * settings shape the memory, the collector, the window scaling and the address preference; the rest is
-     * what every client needs: the module exports and native access <code>run.bat</code> passes, plus what a
-     * runtime past 23 wants; then whatever extra options were given, and <code>-U</code> with the cache proxy's
-     * URL only while the checkbox is on.
+     * The client command line: <code>java -Xms -Xmx [-XX:+AlwaysPreTouch] [-XX:+UseZGC [-XX:+ZGenerational]]
+     * [--sun-misc-unsafe-memory-access=allow] --add-exports ×3 --enable-native-access
+     * [-Dsun.java2d.uiScale.enabled=false] -Djava.net.preferIPv6Addresses= java.opts... -jar hafen.jar</code>.
+     * Client configuration is not here: see {@link ClientInstall#configure}.
      */
     static List<String> command(Path java, Settings.Launch l) {
-        int feature = Runtime.version().feature();   // the same runtime runs the launcher and the client
+        int feature = Runtime.version().feature();   // the launcher and the client run on the same runtime
         List<String> cmd = new ArrayList<>();
         cmd.add(java.toString());
         cmd.add("-Xms" + l.heap());
@@ -345,10 +331,10 @@ public final class Launcher {
         if(l.gc().equals("zgc")) {
             cmd.add("-XX:+UseZGC");
             if(feature < 24)
-                cmd.add("-XX:+ZGenerational");               // the default from 23, an obsolete flag from 24
+                cmd.add("-XX:+ZGenerational");               // default since 23, obsolete (warns) from 24
         }
         if(feature >= 23)
-            cmd.add("--sun-misc-unsafe-memory-access=allow");  // JOGL and LWJGL still use it; 24+ warns without this
+            cmd.add("--sun-misc-unsafe-memory-access=allow");  // JOGL and LWJGL use Unsafe; 24+ warns otherwise
         cmd.add("--add-exports=java.base/java.lang=ALL-UNNAMED");
         cmd.add("--add-exports=java.desktop/sun.awt=ALL-UNNAMED");
         cmd.add("--add-exports=java.desktop/sun.java2d=ALL-UNNAMED");
@@ -359,10 +345,6 @@ public final class Launcher {
         cmd.addAll(l.opts());
         cmd.add("-jar");
         cmd.add("hafen.jar");
-        if(l.proxy()) {
-            cmd.add("-U");
-            cmd.add(l.proxyUrl());
-        }
         return cmd;
     }
 
@@ -389,7 +371,8 @@ public final class Launcher {
         } catch(Exception e) {
             System.out.println("newest:    unreachable: " + e);
         }
-        System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off (the game's own resource server)"));
+        System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
+        System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
         System.out.println("command:   " + String.join(" ", command(javaw, settings)));
         if(settings.console())
@@ -397,8 +380,7 @@ public final class Launcher {
         System.out.println("cwd:       " + client.dir());
     }
 
-    /** The folder the launcher lives in: <code>launcher.home</code> when set (the development run names this
-     *  folder), else the folder <code>launcher.jar</code> is in, else the working directory. */
+    /** <code>-Dlauncher.home</code>; else the folder of {@link #jar()}; else the working directory. */
     static Path home() {
         String set = System.getProperty("launcher.home");
         if(set != null)
@@ -407,7 +389,7 @@ public final class Launcher {
         return (jar != null) ? jar.getParent() : Paths.get("").toAbsolutePath();
     }
 
-    /** The jar this launcher runs from, or null: a classes/ folder, as a development run has it. */
+    /** The jar this class was loaded from; null from a classes folder. */
     static Path jar() {
         try {
             CodeSource src = Launcher.class.getProtectionDomain().getCodeSource();
@@ -417,31 +399,30 @@ public final class Launcher {
                     return self.toAbsolutePath();
             }
         } catch(URISyntaxException | RuntimeException e) {
-            // no jar to speak of
+            // no code source
         }
         return null;
     }
 
-    /** The launcher's version, from the jar's manifest — <code>1.0.1</code> — or null off a classes/ folder. */
+    /** <code>Implementation-Version</code> of the jar manifest; null from a classes folder. */
     static String version() {
         return Launcher.class.getPackage().getImplementationVersion();
     }
 
-    /** Whether the launcher runs as shipped: <code>launcher.jar</code> in <code>home</code>, with a version in its
-     *  manifest, on the runtime beside it. A development run — a classes/ folder, or <code>build/launcher.jar</code>
-     *  with <code>launcher.home</code> naming the source folder — is not, and is not replaced by a release. */
+    /** True if running from <code>home/launcher.jar</code> with a manifest version and <code>home/runtime/</code>
+     *  present: self-update applies. False for a development run. */
     static boolean shipped(Path home) {
         try {
             Path jar = jar();
             return (jar != null) && (version() != null) && Files.isSameFile(jar, home.resolve("launcher.jar"))
                 && Files.isDirectory(home.resolve("runtime"));
         } catch(IOException e) {
-            return false;                           // no launcher.jar in home: not the shipped folder
+            return false;                           // no home/launcher.jar
         }
     }
 
-    /** The runtime's windowless Java: <code>runtime/bin/javaw.exe</code> beside the launcher, or the JVM running
-     *  this launcher when there is no such image (development). */
+    /** <code>home/runtime/bin/javaw.exe</code> if present; else <code>java.home/bin/javaw.exe</code>, else
+     *  <code>java.home/bin/java</code>. */
     static Path javaw(Path home) {
         Path shipped = home.resolve("runtime").resolve("bin").resolve("javaw.exe");
         if(Files.exists(shipped))
@@ -450,8 +431,7 @@ public final class Launcher {
         return Files.exists(own) ? own : Paths.get(System.getProperty("java.home"), "bin", "java");
     }
 
-    /** The window title: the launcher's version from the jar's manifest, and the client's when one is offered
-     *  (<code>null</code> while none is). */
+    /** Window title: launcher version, plus the client version when <code>offered</code> is not null. */
     private static String title(String offered) {
         String v = version();
         return "Brodgar.io" + ((v == null) ? "" : " launcher " + v) + ((offered == null) ? "" : " · client " + offered);
