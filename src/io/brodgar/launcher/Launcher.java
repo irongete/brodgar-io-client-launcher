@@ -219,7 +219,7 @@ public final class Launcher {
             return Outcome.READY;
         }
         try {
-            String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + GitHubRelease.version(latest) + ".zip");
+            String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + latest + ".zip");
             ui.status((installed == null) ? "Downloading client " + latest + " (" + kind + ")..." : "Installing " + latest + " (" + kind + ") over " + installed + "...");
             Files.createDirectories(client.dir());
             Path zip = client.download();
@@ -368,7 +368,7 @@ public final class Launcher {
         try {
             String latest = GitHubRelease.newestTag(settings.repo(), settings.channel());
             System.out.println("newest:    " + latest);
-            System.out.println("asset:     " + GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + GitHubRelease.version(latest) + ".zip"));
+            System.out.println("asset:     " + GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + latest + ".zip"));
         } catch(GitHubRelease.NoReleaseException e) {
             System.out.println("newest:    none on this channel (" + e.getMessage() + ")");
         } catch(Exception e) {

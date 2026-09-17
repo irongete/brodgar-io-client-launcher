@@ -31,8 +31,8 @@ Window: status line, progress bar, main button; console checkbox; proxy checkbox
    API fails, follow the redirect of `github.com/<repo>/releases/latest` (latest non-prerelease). No result:
    Release channel reports "nothing published"; Beta channel reports "unreachable" (a beta cannot be
    detected via the redirect).
-2. If the tag differs from the installed one: download `releases/download/<tag>/<asset.prefix><version>.zip`
-   (`version` = tag without `v`) to `client/download.tmp`, unpack over `client/` (`REPLACE_EXISTING`; files
+2. If the tag differs from the installed one: download `releases/download/<tag>/<asset.prefix><tag>.zip`
+   (`brodgar-io-client-v5.1-beta.zip`) to `client/download.tmp`, unpack over `client/` (`REPLACE_EXISTING`; files
    not in the zip are kept — `savedata/`, addons added by hand), write `installed-version`. A download with
    no bytes for 60 s fails. `download.tmp`/`download.tmp.part` left by a failed run are deleted on the next
    start.
@@ -96,7 +96,7 @@ starts the current launcher with `--no-launcher-update`; the next start retries.
 | `addons.dir` | *(empty)* | `haven.addondir` in `client/haven-config.properties`; empty: line removed (client default `client/addons`). The client puts `savedata/` beside that folder |
 | `check.updates` | `true` | `false`: skip steps 0 and 1, offer the installed client |
 | `repo` | `irongete/brodgar-io-client` | GitHub `owner/repo` of the client releases |
-| `asset.prefix` | `brodgar-io-client-` | asset name = `<asset.prefix><version>.zip` |
+| `asset.prefix` | `brodgar-io-client-` | asset name = `<asset.prefix><tag>.zip` |
 | `launcher.repo` | `irongete/brodgar-io-client-launcher` | GitHub `owner/repo` of the launcher releases |
 
 Command line: `--check` resolves both newest releases and prints home, runtime, versions, asset URL, the

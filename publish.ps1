@@ -184,11 +184,16 @@ if ($Notes) {
         $previous = $null
         if ($newest -and (git tag -l $newest.Tag)) { $previous = $newest.Tag }
         if (-not $previous) { $previous = git tag -l 'v*' --merged HEAD --sort=-v:refname | Select-Object -First 1 }
-        $range = if ($previous) { "$previous..HEAD" } else { 'HEAD' }
-        $log = git log --format='- %s' $range
-        if (-not $log) { throw "no commits since $previous to write notes from: give -Notes or -Message" }
-        Set-Content -Path $notesFile -Value $log -Encoding UTF8
-        Write-Host "Release notes (the commits since $(if ($previous) { $previous } else { 'the beginning' })):"
+        if ($previous) {
+            $log = @(git log --format='- %s' --max-count=200 "$previous..HEAD")
+            if (-not $log) { throw "no commits since $previous to write notes from: give -Notes or -Message" }
+            $count = [int](git rev-list --count "$previous..HEAD")
+            if ($count -gt $log.Count) { $log += "- ... and $($count - $log.Count) more" }
+        } else {
+            $log = @('The first version.')   # not the whole history of the fork
+        }
+        Set-Content -Path $notesFile -Value ($log -join "`n") -Encoding UTF8
+        Write-Host "Release notes$(if ($previous) { " (the commits since $previous)" }):"
         $log | ForEach-Object { Write-Host "  $_" }
     }
 }
