@@ -23,8 +23,8 @@ Started from Steam, the folder is `%LOCALAPPDATA%\Brodgar.io` and the runtime is
 Window: status line, progress bar, main button; console checkbox; proxy checkbox, channel dropdown,
 **Options...**; **Open client folder**. On start:
 
-0. GET the launcher's own releases (`launcher.repo`). A tag newer than the jar manifest's version starts the
-   updater and exits — see [Self-update](#self-update). A `dev` launcher (any build without `-Dversion=`)
+0. GET the launcher's own releases (`launcher.repo`): one line, `v1`, `v2`, …, no channel. A tag newer than
+   the jar manifest's version starts the updater and exits — see [Self-update](#self-update). A `dev` launcher (any build without `-Dversion=`)
    skips this step.
 1. Read `client/installed-version`. GET `https://api.github.com/repos/<repo>/releases` (one call, no token);
    pick the highest version tag on the channel (`v6` > `v5.3-beta` > `v5`, independent of API order). If the
@@ -140,25 +140,18 @@ output is not committed.
 
 ## Publish
 
-A **release** is a number, `v6`: a plain GitHub release, which every launcher installs. A **beta** is
-`v6.1-beta`, `v6.2-beta`, … — the betas since release 6: GitHub pre-releases, which only a launcher on its
-Beta channel installs. So `v5 < v5.1-beta < v5.2-beta < v6`: the Release channel counts 5, 6, 7, and the Beta
-channel sees the betas in between. The script counts from the newest version on GitHub, whichever channel it
-is on. From a clean `master`, with `git`, `ant` and `gh` (`gh auth login`) on the PATH:
+The launcher has one line of releases, `v1`, `v2`, `v3`, … — no betas: every launcher updates itself to
+the newest. From a clean `master`, with `git`, `ant` and `gh` (`gh auth login`) on the PATH:
 
 ```powershell
-.\publish.ps1 -Beta         # the next beta:     v2 -> v2.1-beta, v2.1-beta -> v2.2-beta
-.\publish.ps1 -Release      # the next release:  v2.3-beta -> v3, v2 -> v3
+.\publish.ps1               # the next number: v1 -> v2
+.\publish.ps1 -Version 5    # that number
 ```
 
-[`publish.ps1`](publish.ps1) prints the newest version on GitHub, the one it is about to publish and — for a
-release after a beta — whether `master` still holds that beta's code, and asks (`-Yes` skips the question);
-then it runs `ant -Dversion=<version> release`, tags HEAD `v<version>`, pushes branch and tag, creates the
-GitHub release with the zip as asset. Notes: `-Notes <file>`, `-Message "..."`, or the commit subjects since
-the previous version. `-NoPublish` stops after the tag; `-Draft` is passed to GitHub. Nothing published
-counts as release 0: the first beta is `v0.1-beta`, the first release `v1`. `-Version 1.0.2` names the number
-instead of counting it — the launchers installed before this scheme read `X.Y.Z` tags only, so while any is
-out there the publish they update to is `-Release -Version 1.0.2`, which reads everything after. Then
+[`publish.ps1`](publish.ps1) prints the newest version on GitHub and the one it is about to publish and asks
+(`-Yes` skips the question); then it runs `ant -Dversion=<n> release`, tags HEAD `vN`, pushes tag and branch,
+creates the GitHub release with the zip as asset. Notes: `-Notes <file>`, `-Message "..."`, or the commit
+subjects since the previous version. `-NoPublish` stops after the tag; `-Draft` is passed to GitHub. Then
 `.\publish-steam.ps1` puts the same launcher on the Workshop — see below.
 
 ## Steam Workshop

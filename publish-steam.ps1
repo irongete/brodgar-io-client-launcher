@@ -31,8 +31,8 @@
   (`ant bin` there).
 
 .PARAMETER Version
-  The launcher's version in the jar's manifest (its window title): 6, or 5.1-beta. By default the v* tag
-  HEAD carries, when the tree is clean; dev otherwise.
+  The launcher's version in the jar's manifest (its window title): a number. By default the v* tag HEAD
+  carries, when the tree is clean; dev otherwise.
 .PARAMETER Message
   The change note Steam shows in the item's change history.
 .PARAMETER Visibility
@@ -71,7 +71,7 @@ function Write-Properties {
 }
 
 # --- checks -------------------------------------------------------------------------------------------------
-if ($Version -and $Version -notmatch '^\d+(\.\d+)*(-beta)?$') { throw "the version must look like 6 or 5.1-beta, not '$Version'" }
+if ($Version -and $Version -notmatch '^\d+(\.\d+)*$') { throw "the version must be a number, not '$Version'" }
 if (-not (Test-Path $properties)) { throw "$properties not found: this is not the launcher checkout" }
 $tool = Join-Path $Client 'bin\hafen.jar'
 if (-not $NoUpload) {

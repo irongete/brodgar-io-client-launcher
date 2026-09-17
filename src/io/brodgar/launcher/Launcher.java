@@ -175,12 +175,13 @@ public final class Launcher {
         System.exit(0);
     }
 
-    /** Newest launcher tag on the channel if {@link GitHubRelease#compare} puts it above {@link #version()};
+    /** Newest launcher tag if {@link GitHubRelease#compare} puts it above {@link #version()}. The launcher has one
+     *  line of releases, so its channel setting (the client's) plays no part;
      *  else null. */
     private static String newerLauncher(Settings settings) throws IOException, InterruptedException {
         String tag;
         try {
-            tag = GitHubRelease.newestTag(settings.launcherRepo(), settings.channel());
+            tag = GitHubRelease.newestTag(settings.launcherRepo(), Channel.RELEASE);
         } catch(GitHubRelease.NoReleaseException e) {
             return null;
         }
