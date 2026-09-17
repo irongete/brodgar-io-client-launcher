@@ -143,7 +143,7 @@ if ($Notes) {
 } else {
     $notesFile = Join-Path ([IO.Path]::GetTempPath()) "brodgar.io-launcher-$Version-notes.md"
     if ($Message) {
-        Set-Content -Path $notesFile -Value $Message -Encoding UTF8
+        [IO.File]::WriteAllText($notesFile, $Message, (New-Object Text.UTF8Encoding $false))   # no BOM: PowerShell 5.1 would write one
     } else {
         # since the newest published version when its tag is here, else since the highest tag reachable
         $previous = $null
@@ -157,7 +157,7 @@ if ($Notes) {
         } else {
             $log = @('The first version.')   # not the whole history
         }
-        Set-Content -Path $notesFile -Value ($log -join "`n") -Encoding UTF8
+        [IO.File]::WriteAllText($notesFile, ($log -join "`n"), (New-Object Text.UTF8Encoding $false))
         Write-Host "Release notes$(if ($previous) { " (the commits since $previous)" }):"
         $log | ForEach-Object { Write-Host "  $_" }
     }
