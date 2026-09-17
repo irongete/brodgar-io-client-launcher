@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Publish the Brodgar.io launcher on the Steam Workshop: build the item, upload it, set its visibility.
+  Publish the brodgar.io launcher on the Steam Workshop: build the item, upload it, set its visibility.
 
 .DESCRIPTION
   One command puts the launcher as it stands on Steam, as the Workshop item workshop\ describes:

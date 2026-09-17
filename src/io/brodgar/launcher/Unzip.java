@@ -13,7 +13,7 @@ import java.util.zip.ZipFile;
 /**
  * Zip extraction over a folder: entries are written with <code>REPLACE_EXISTING</code>; existing files not in
  * the zip are kept. If every entry is under one top-level folder, that folder is stripped
- * (<code>brodgar-io-client-0.1.0/hafen.jar</code> → <code>hafen.jar</code>). An entry resolving outside the
+ * (<code>brodgar.io-client-v1/hafen.jar</code> → <code>hafen.jar</code>). An entry resolving outside the
  * target (absolute, backslash, <code>..</code>) throws <code>IOException</code>.
  */
 final class Unzip {

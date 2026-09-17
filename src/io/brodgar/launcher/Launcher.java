@@ -281,7 +281,7 @@ public final class Launcher {
     }
 
     /**
-     * <code>cmd /c start "Brodgar.io client" /wait /D dir cmd /c java.exe ...args ^|^| pause</code>: the client
+     * <code>cmd /c start "brodgar.io client" /wait /D dir cmd /c java.exe ...args ^|^| pause</code>: the client
      * on <code>java.exe</code> in its own console window; the outer cmd waits, so the returned process ends
      * with the client. <code>^|^|</code> keeps the outer cmd from evaluating <code>||</code>. java.exe is
      * given relative to <code>dir</code> (<code>..\runtime\bin\java.exe</code>) so no quoting is needed after
@@ -299,7 +299,7 @@ public final class Launcher {
         if(exe.indexOf(' ') >= 0)
             exe = "\"" + exe + "\"";
         List<String> client = command(java, s.launch());
-        List<String> cmd = new ArrayList<>(List.of("cmd.exe", "/c", "start", "\"Brodgar.io client\"", "/wait", "/D", "\"" + dir + "\"", "cmd.exe", "/c", exe));
+        List<String> cmd = new ArrayList<>(List.of("cmd.exe", "/c", "start", "\"brodgar.io client\"", "/wait", "/D", "\"" + dir + "\"", "cmd.exe", "/c", exe));
         cmd.addAll(client.subList(1, client.size()));           // the arguments of command(), java.exe as above
         cmd.addAll(List.of("^|^|", "pause"));
         return cmd;
@@ -446,7 +446,7 @@ public final class Launcher {
     /** Window title: launcher version, plus the client version when <code>offered</code> is not null. */
     private static String title(String offered) {
         String v = version();
-        return "Brodgar.io" + ((v == null) ? "" : " launcher " + (released() ? "v" + v : v)) + ((offered == null) ? "" : " · client " + offered);
+        return "brodgar.io" + ((v == null) ? "" : " launcher " + (released() ? "v" + v : v)) + ((offered == null) ? "" : " · client " + offered);
     }
 
     private static String tail(Path log, int lines) {

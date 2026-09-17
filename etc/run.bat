@@ -1,6 +1,6 @@
 @echo off
 rem ----------------------------------------------------------------------
-rem  Brodgar.io client launcher.
+rem  brodgar.io launcher.
 rem
 rem  Double-click run.bat: it starts launcher.jar on the Java runtime in
 rem  runtime\ beside it, so nothing has to be installed. The launcher keeps

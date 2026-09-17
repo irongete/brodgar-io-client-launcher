@@ -1,10 +1,10 @@
-# Brodgar.io client launcher
+# brodgar.io launcher
 
-Installs and updates the [Brodgar.io client](https://github.com/irongete/brodgar-io-client) from GitHub
+Installs and updates the [brodgar.io client](https://github.com/irongete/brodgar-io-client) from GitHub
 releases, updates itself the same way, and starts the client on the bundled Java runtime.
 
 ```text
-brodgar.io-client-launcher-<version>-windows/   the zip's contents, at its root
+brodgar.io-launcher-<tag>/   the zip's contents, at its root
   run.bat                starts launcher.jar on runtime/
   launcher.jar
   runtime/               jlink runtime; runs the launcher and the client
@@ -32,7 +32,7 @@ Window: status line, progress bar, main button; console checkbox; proxy checkbox
    Release channel reports "nothing published"; Beta channel reports "unreachable" (a beta cannot be
    detected via the redirect).
 2. If the tag differs from the installed one: download `releases/download/<tag>/<asset.prefix><tag>.zip`
-   (`brodgar-io-client-v5.1-beta.zip`) to `client/download.tmp`, unpack over `client/` (`REPLACE_EXISTING`; files
+   (`brodgar.io-client-v5.1-beta.zip`) to `client/download.tmp`, unpack over `client/` (`REPLACE_EXISTING`; files
    not in the zip are kept — `savedata/`, addons added by hand), write `installed-version`. A download with
    no bytes for 60 s fails. `download.tmp`/`download.tmp.part` left by a failed run are deleted on the next
    start.
@@ -66,7 +66,7 @@ Locale: English only; the runtime carries no other locale data.
 
 If step 0 finds a newer tag, the launcher copies `launcher.jar` to `update/` (the running jar is locked),
 starts `io.brodgar.launcher.Updater` from that copy and exits. The updater waits for the launcher process
-to end, downloads `brodgar.io-client-launcher-<version>-windows.zip` into `update/`, unpacks it, moves
+to end, downloads `brodgar.io-launcher-<tag>.zip` into `update/`, unpacks it, moves
 `launcher.jar` and `run.bat` into place (atomic move each), restarts the launcher, which deletes `update/`.
 `client/` is not touched.
 
@@ -96,7 +96,7 @@ starts the current launcher with `--no-launcher-update`; the next start retries.
 | `addons.dir` | *(empty)* | `haven.addondir` in `client/haven-config.properties`; empty: line removed (client default `client/addons`). The client puts `savedata/` beside that folder |
 | `check.updates` | `true` | `false`: skip steps 0 and 1, offer the installed client |
 | `repo` | `irongete/brodgar-io-client` | GitHub `owner/repo` of the client releases |
-| `asset.prefix` | `brodgar-io-client-` | asset name = `<asset.prefix><tag>.zip` |
+| `asset.prefix` | `brodgar.io-client-` | asset name = `<asset.prefix><tag>.zip` |
 | `launcher.repo` | `irongete/brodgar-io-client-launcher` | GitHub `owner/repo` of the launcher releases |
 
 Command line: `--check` resolves both newest releases and prints home, runtime, versions, asset URL, the
@@ -119,7 +119,7 @@ Without it, the JDK running `ant` is used (21+ with `jlink`).
 | `ant jar` | `build/launcher.jar` (version in the manifest) |
 | `ant runtime` | `build/runtime/`: `jlink` of the modules `jdeps` reports for `hafen.jar` and its libraries |
 | `ant dist` | `build/dist/Brodgar/`: `launcher.jar`, `run.bat`, `runtime/` |
-| `ant release` | `build/brodgar.io-client-launcher-<version>-windows.zip`: the `dist` folder's contents at the zip root |
+| `ant release` | `build/brodgar.io-launcher-<tag>.zip`: the `dist` folder's contents at the zip root |
 | `ant check` | `--check` with `launcher.home` = this folder |
 | `ant run` | the launcher with `launcher.home` = this folder (`client/`, `launcher.properties` gitignored) |
 | `ant workshop` | `build/workshop/`: `launcher.jar` + `workshop/` |

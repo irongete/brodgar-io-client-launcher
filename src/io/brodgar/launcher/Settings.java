@@ -19,7 +19,7 @@ import java.util.Properties;
  */
 public final class Settings {
     private static final String DEFAULTS = """
-        # Brodgar.io launcher settings. A missing key takes its default. See README.md, "Settings".
+        # brodgar.io launcher settings. A missing key takes its default. See README.md, "Settings".
 
         # -Xms<heap> -Xmx<heap>
         heap=2g
@@ -56,9 +56,9 @@ public final class Settings {
         # false: no release lookup for the launcher or the client
         check.updates=true
 
-        # GitHub owner/repo of the client releases; asset name = <asset.prefix><version>.zip
+        # GitHub owner/repo of the client releases; asset name = <asset.prefix><tag>.zip
         repo=irongete/brodgar-io-client
-        asset.prefix=brodgar-io-client-
+        asset.prefix=brodgar.io-client-
 
         # GitHub owner/repo of the launcher releases
         launcher.repo=irongete/brodgar-io-client-launcher
@@ -101,7 +101,7 @@ public final class Settings {
     String ipv6()             {String v = get("ipv6", "system").toLowerCase(); return (v.equals("true") || v.equals("false")) ? v : "system";}
     String javaOptsText()     {return get("java.opts", "");}
     String repo()             {return get("repo", "irongete/brodgar-io-client");}
-    String assetPrefix()      {return get("asset.prefix", "brodgar-io-client-");}
+    String assetPrefix()      {return get("asset.prefix", "brodgar.io-client-");}
     String launcherRepo()     {return get("launcher.repo", "irongete/brodgar-io-client-launcher");}
     Channel channel()         {return Channel.of(get("channel", "beta"), Channel.BETA);}
     boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}

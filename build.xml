@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 
-<!-- The Brodgar.io client launcher. `ant dist` builds the folder a player unzips and runs:
+<!-- The brodgar.io launcher. `ant dist` builds the folder a player unzips and runs:
        build/dist/Brodgar/run.bat        starts the launcher on the runtime beside it
        build/dist/Brodgar/launcher.jar
        build/dist/Brodgar/runtime/       a Java runtime cut from the JDK (jlink), which also runs the client
@@ -20,7 +20,7 @@
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
   <!-- The release asset: what the launcher downloads to update itself, so Updater.java names it the same way. -->
-  <property name="asset" value="brodgar.io-client-launcher-${version}-windows.zip" />
+  <property name="asset" value="brodgar.io-launcher-v${version}.zip" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
        handshake wants on a JDK before 22 (an empty module after), jdk.management, which the Options
        dialog reads the machine's memory through, and java.sql, which the addon store's SQLite driver
@@ -41,7 +41,7 @@
       <fileset dir="build/classes" />
       <manifest>
         <attribute name="Main-Class" value="${main.class}" />
-        <attribute name="Implementation-Title" value="Brodgar.io launcher" />
+        <attribute name="Implementation-Title" value="brodgar.io launcher" />
         <attribute name="Implementation-Version" value="${version}" />
       </manifest>
     </jar>

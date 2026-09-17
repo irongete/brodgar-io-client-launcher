@@ -39,7 +39,7 @@ public final class Workshop {
             new ProcessBuilder(cmd).directory(home.toFile()).redirectErrorStream(true)
                 .redirectOutput(home.resolve("launcher.log").toFile()).start();
         } catch(IOException | RuntimeException e) {
-            JOptionPane.showMessageDialog(null, "The Brodgar.io launcher could not be started: " + e, "Brodgar.io", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(null, "The brodgar.io launcher could not be started: " + e, "brodgar.io", JOptionPane.ERROR_MESSAGE);
         }
         Thread exit = new Thread(() -> {
             try {

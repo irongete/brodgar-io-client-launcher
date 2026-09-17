@@ -39,8 +39,8 @@ import javax.swing.WindowConstants;
  */
 public final class Updater {
     private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** Asset name parts, as build.xml: <code>brodgar.io-client-launcher-&lt;version&gt;-windows.zip</code>. */
-    private static final String ASSET_PREFIX = "brodgar.io-client-launcher-", ASSET_SUFFIX = "-windows.zip";
+    /** Asset name parts, as build.xml: <code>brodgar.io-launcher-&lt;tag&gt;.zip</code>. */
+    private static final String ASSET_PREFIX = "brodgar.io-launcher-", ASSET_SUFFIX = ".zip";
 
     private final Path home;
     private final JFrame frame;
@@ -54,7 +54,7 @@ public final class Updater {
         } catch(Exception e) {
             // cross-platform look and feel then
         }
-        frame = new JFrame("Brodgar.io launcher v" + version);
+        frame = new JFrame("brodgar.io launcher v" + version);
         status = new JLabel("Waiting for the launcher to close...");
         bar = new JProgressBar(0, 1000);
         bar.setIndeterminate(true);
@@ -163,9 +163,9 @@ public final class Updater {
 
     // ---- called by the launcher --------------------------------------------------------------------------------
 
-    /** Asset name for <code>tag</code>: <code>brodgar.io-client-launcher-1.1.0-windows.zip</code> for <code>v1.1.0</code>. */
+    /** Asset name for <code>tag</code>: <code>brodgar.io-launcher-v2.zip</code> for <code>v2</code>. */
     static String asset(String tag) {
-        return ASSET_PREFIX + GitHubRelease.version(tag) + ASSET_SUFFIX;
+        return ASSET_PREFIX + tag + ASSET_SUFFIX;
     }
 
     /** Copy <code>launcher.jar</code> to <code>update/updater.jar</code> and start {@link #main} from it with

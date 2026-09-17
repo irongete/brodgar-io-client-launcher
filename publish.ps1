@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Publish the Brodgar.io launcher on GitHub: build, zip, tag, push, release.
+  Publish the brodgar.io launcher on GitHub: build, zip, tag, push, release.
 
 .DESCRIPTION
     .\publish.ps1              the next number:  v1 -> v2
@@ -44,7 +44,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = 'irongete/brodgar-io-client-launcher'
-$product = 'Brodgar.io launcher'
+$product = 'brodgar.io launcher'
 Set-Location $PSScriptRoot
 
 function Run {
@@ -120,7 +120,7 @@ $title = "$product $tag"
 if ($newest -and $current -eq 'master' -and (Parse-Version $Version).Key -le $newest.Version.Key) {
     throw "$tag is not above $($newest.Tag), the newest on GitHub, and a launcher never installs a lower version: name one above it, or leave -Version out"
 }
-$asset = Join-Path 'build' "brodgar.io-client-launcher-$Version-windows.zip"
+$asset = Join-Path 'build' "brodgar.io-launcher-$tag.zip"
 if (git tag -l $tag) { throw "the tag $tag already exists in this clone" }
 if ($needsGitHub -and ($published | Where-Object { $_.Tag -eq $tag })) { throw "$tag is published on GitHub already" }
 if (-not $NoPublish -and (git ls-remote --tags origin $tag)) { throw "the tag $tag already exists on origin" }
@@ -141,7 +141,7 @@ if (-not $Yes) {
 if ($Notes) {
     $notesFile = (Resolve-Path $Notes).Path
 } else {
-    $notesFile = Join-Path ([IO.Path]::GetTempPath()) "brodgar-io-client-launcher-$Version-notes.md"
+    $notesFile = Join-Path ([IO.Path]::GetTempPath()) "brodgar.io-launcher-$Version-notes.md"
     if ($Message) {
         Set-Content -Path $notesFile -Value $Message -Encoding UTF8
     } else {
