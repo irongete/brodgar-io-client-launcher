@@ -352,7 +352,7 @@ public final class Launcher {
     private static void check(Path home, Settings settings, ClientInstall client, Path javaw, boolean shipped) {
         System.out.println("home:      " + home);
         System.out.println("runtime:   " + javaw + (Files.exists(javaw) ? "" : "  (MISSING)"));
-        System.out.println("launcher:  " + version() + (!shipped ? " (a development run: not updated)"
+        System.out.println("launcher:  " + (released() ? "v" : "") + version() + (!shipped ? " (a development run: not updated)"
                                                        : !released() ? " (a development build: never updated)"
                                                        : " (as shipped: kept at the channel's newest release)"));
         if(shipped && released()) {
@@ -445,7 +445,7 @@ public final class Launcher {
     /** Window title: launcher version, plus the client version when <code>offered</code> is not null. */
     private static String title(String offered) {
         String v = version();
-        return "Brodgar.io" + ((v == null) ? "" : " launcher " + v) + ((offered == null) ? "" : " · client " + offered);
+        return "Brodgar.io" + ((v == null) ? "" : " launcher " + (released() ? "v" + v : v)) + ((offered == null) ? "" : " · client " + offered);
     }
 
     private static String tail(Path log, int lines) {

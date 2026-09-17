@@ -54,7 +54,7 @@ public final class Updater {
         } catch(Exception e) {
             // cross-platform look and feel then
         }
-        frame = new JFrame("Brodgar.io launcher " + version);
+        frame = new JFrame("Brodgar.io launcher v" + version);
         status = new JLabel("Waiting for the launcher to close...");
         bar = new JProgressBar(0, 1000);
         bar.setIndeterminate(true);
