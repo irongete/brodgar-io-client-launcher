@@ -1,9 +1,9 @@
 package io.brodgar.launcher;
 
 /**
- * Release filter. <code>RELEASE</code>: highest semver tag with <code>prerelease=false</code>;
- * <code>BETA</code>: highest tag of all. The client's <code>release.ps1</code> publishes a suffixed version
- * (<code>0.1.0-beta.1</code>) as prerelease, a plain one as release.
+ * Release filter. <code>RELEASE</code>: highest version tag with <code>prerelease=false</code>;
+ * <code>BETA</code>: highest tag of all. The client's <code>publish.ps1</code> publishes a beta
+ * (<code>v5.1-beta</code>) as prerelease, a release (<code>v6</code>) as a plain release.
  */
 enum Channel {
     RELEASE("release", "Release"),

@@ -21,8 +21,10 @@ import java.util.regex.Pattern;
 
 /**
  * GitHub releases API client. <code>GET /repos/{repo}/releases?per_page=100</code>, unauthenticated; the
- * channel picks the highest <code>vMAJOR.MINOR.PATCH[-pre]</code> by {@link #compare} (a plain version above
- * its pre-releases), ignoring API order. If the API call fails (rate limit, network), the fallback is the
+ * channel picks the highest version-shaped tag by {@link #compare}, ignoring API order. A version is dotted
+ * numbers with an optional suffix: the client's and the launcher's own are <code>vN</code> for a release and
+ * <code>vN.X-beta</code> for the X-th beta since it (<code>v5 &lt; v5.1-beta &lt; v5.2-beta &lt; v6</code>);
+ * the older <code>vMAJOR.MINOR.PATCH[-pre]</code> tags order the same way. If the API call fails (rate limit, network), the fallback is the
  * <code>Location</code> of <code>github.com/{repo}/releases/latest</code> — GitHub's latest non-prerelease —
  * for either channel; with no such release, RELEASE gets {@link NoReleaseException}, BETA gets the API's
  * <code>IOException</code> (the redirect cannot show a prerelease). Assets:
@@ -37,7 +39,7 @@ final class GitHubRelease {
     private static final Pattern TAG = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]*)\"");
     private static final Pattern PRERELEASE = Pattern.compile("\"prerelease\"\\s*:\\s*(true|false)");
     private static final Pattern DRAFT = Pattern.compile("\"draft\"\\s*:\\s*(true|false)");
-    private static final Pattern VERSION = Pattern.compile("v?(\\d+)\\.(\\d+)\\.(\\d+)(?:-([0-9A-Za-z.]+))?");
+    private static final Pattern VERSION = Pattern.compile("v?(\\d+(?:\\.\\d+)*)(?:-([0-9A-Za-z.]+))?");
 
     /** <code>tag_name</code> and <code>prerelease</code> of one API release object. */
     record Release(String tag, boolean prerelease) {}
@@ -128,19 +130,23 @@ final class GitHubRelease {
         return out;
     }
 
-    /** Semver order: MAJOR.MINOR.PATCH numerically; no pre-release > pre-release; pre-release identifiers
-     *  dot-wise (numeric, else lexical; shorter list lower). Non-version tags lowest. */
+    /** Version order: the dotted numbers component by component, a missing one counting as 0
+     *  (<code>5.1 &gt; 5</code>, <code>6 &gt; 5.3</code>); at equal numbers no suffix > suffix
+     *  (<code>5.1 &gt; 5.1-beta</code>); suffix identifiers dot-wise (numeric, else lexical; shorter list
+     *  lower). Non-version tags lowest. */
     static int compare(String a, String b) {
         Matcher ma = VERSION.matcher(a), mb = VERSION.matcher(b);
         boolean va = ma.matches(), vb = mb.matches();
         if(!va || !vb)
             return Boolean.compare(va, vb);
-        for(int g = 1; g <= 3; g++) {
-            int c = Long.compare(Long.parseLong(ma.group(g)), Long.parseLong(mb.group(g)));
+        String[] da = ma.group(1).split("\\."), db = mb.group(1).split("\\.");
+        for(int i = 0; i < Math.max(da.length, db.length); i++) {
+            long xa = (i < da.length) ? Long.parseLong(da[i]) : 0, xb = (i < db.length) ? Long.parseLong(db[i]) : 0;
+            int c = Long.compare(xa, xb);
             if(c != 0)
                 return c;
         }
-        String pa = ma.group(4), pb = mb.group(4);
+        String pa = ma.group(2), pb = mb.group(2);
         if((pa == null) || (pb == null))
             return Boolean.compare(pb != null, pa != null);   // no suffix outranks a suffix
         String[] ia = pa.split("\\."), ib = pb.split("\\.");
@@ -170,6 +176,12 @@ final class GitHubRelease {
         if((res.statusCode() == 200) || (redirect && location.matches(".*/releases/?")))
             throw new NoReleaseException("no release published at github.com/" + repo, null);
         throw new IOException("unexpected answer from github.com/" + repo + " (HTTP " + res.statusCode() + ")");
+    }
+
+    /** True if <code>s</code> is a version the channels know: dotted numbers, an optional suffix. False for
+     *  null and for <code>dev</code>, what <code>ant</code> stamps a build without <code>-Dversion</code>. */
+    static boolean isVersion(String s) {
+        return (s != null) && VERSION.matcher(s).matches();
     }
 
     /** Tag without its leading <code>v</code>. */

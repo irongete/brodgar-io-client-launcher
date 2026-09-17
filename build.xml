@@ -14,7 +14,9 @@
 <project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
-  <property name="version" value="1.0.0" />
+  <!-- The version is what publish.ps1 passes (-Dversion=1.2.3) and `dev` for every other build. It lands in the
+       jar's manifest, where the launcher reads it back: a `dev` launcher never updates itself. -->
+  <property name="version" value="dev" />
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
   <!-- The release asset: what the launcher downloads to update itself, so Updater.java names it the same way. -->

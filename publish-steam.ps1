@@ -13,10 +13,13 @@
 
   It runs `ant -Dversion=<version> workshop` -- launcher.jar with workshop\'s files around it, in
   build\workshop\ -- and uploads that folder with the client's own tool, haven.SteamWorkshop, out of the
-  client checkout's bin\hafen.jar. The first upload creates the item and the script writes its workshop-id
-  into workshop\workshop-client.properties; every later one updates that item, and Steam hands the new
-  launcher to every subscriber. The item carries the launcher only: the client is installed and kept up to
-  date by the launcher from GitHub, as ever, so a client release never touches the Workshop.
+  client checkout's bin\hafen.jar. The version is the one HEAD is tagged with when the tree is clean --
+  run this right after publish.ps1, and the Workshop carries the launcher GitHub does -- and `dev` for
+  anything else, as with every build that is not a release. The first upload creates the item and the
+  script writes its workshop-id into workshop\workshop-client.properties; every later one updates that
+  item, and Steam hands the new launcher to every subscriber. The item carries the launcher only: the
+  client is installed and kept up to date by the launcher from GitHub, as ever, so a client release never
+  touches the Workshop.
 
   -Visibility is written into workshop\workshop-client.properties before the build, so the file always says
   what the item is; the tool sets the item's visibility (and its title, description and preview image) from
@@ -28,8 +31,8 @@
   (`ant bin` there).
 
 .PARAMETER Version
-  1.2.3 or 1.2.3-beta.1, the launcher's version in the jar's manifest (its window title). By default the
-  newest v* tag reachable from HEAD, which is what the build is based on.
+  The launcher's version in the jar's manifest (its window title): 6, or 5.1-beta. By default the v* tag
+  HEAD carries, when the tree is clean; dev otherwise.
 .PARAMETER Message
   The change note Steam shows in the item's change history.
 .PARAMETER Visibility
@@ -68,7 +71,7 @@ function Write-Properties {
 }
 
 # --- checks -------------------------------------------------------------------------------------------------
-if ($Version -and $Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "the version must look like 1.2.3 or 1.2.3-beta.1, not '$Version'" }
+if ($Version -and $Version -notmatch '^\d+(\.\d+)*(-beta)?$') { throw "the version must look like 6 or 5.1-beta, not '$Version'" }
 if (-not (Test-Path $properties)) { throw "$properties not found: this is not the launcher checkout" }
 $tool = Join-Path $Client 'bin\hafen.jar'
 if (-not $NoUpload) {
@@ -76,9 +79,11 @@ if (-not $NoUpload) {
     if (-not (Get-Command java -ErrorAction SilentlyContinue)) { throw 'java is not on the PATH' }
     if (-not (Get-Process -Name steam -ErrorAction SilentlyContinue)) { throw 'the Steam client is not running: start it and log in first' }
 }
+# the version belongs to its tag: HEAD's, with nothing changed since; anything else is a dev build
+$dirty = [bool](git status --porcelain)
 if (-not $Version) {
-    $tag = (git describe --tags --abbrev=0 --match 'v*' 2>$null)
-    if ($tag) { $Version = $tag.Trim() -replace '^v', '' }
+    $tag = if ($dirty) { $null } else { git tag -l 'v*' --points-at HEAD --sort=-v:refname | Select-Object -First 1 }
+    $Version = if ($tag) { $tag.Trim() -replace '^v', '' } else { 'dev' }
 }
 
 # --- the visibility, into the file that is the item's truth -------------------------------------------------
@@ -93,12 +98,8 @@ $id = [regex]::Match($text, '(?m)^workshop-id=(\d+)').Groups[1].Value
 
 # --- build --------------------------------------------------------------------------------------------------
 $head = (git rev-parse --short HEAD).Trim()
-$dirty = if (git status --porcelain) { ' (with uncommitted changes)' } else { '' }
-Write-Host "Building the Workshop item from $((git rev-parse --abbrev-ref HEAD).Trim()) ($head)$dirty, launcher $(if ($Version) { $Version } else { "build.xml's default version" })..."
-$build = @()
-if ($Version) { $build += "-Dversion=$Version" }
-$build += 'workshop'
-Run ant $build
+Write-Host "Building the Workshop item from $((git rev-parse --abbrev-ref HEAD).Trim()) ($head)$(if ($dirty) { ' (with uncommitted changes)' }), launcher $Version..."
+Run ant @("-Dversion=$Version", 'workshop')
 if (-not (Test-Path (Join-Path $item 'launcher.jar'))) { throw "the build produced no $item\launcher.jar" }
 if ($NoUpload) {
     Write-Host "Item built in $item\ (visibility $current$(if ($id) { ", workshop-id $id" } else { ', not yet uploaded' })). Nothing uploaded (-NoUpload)."

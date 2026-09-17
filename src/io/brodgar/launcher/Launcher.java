@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
  *   client.log             stdout/stderr of the last client run
  * </pre>
  *
- * <p>Start: window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped launchers only), {@link #update}
+ * <p>Start: window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped, released launchers only), {@link #update}
  * (release check, download, unpack), {@link Ui#ready} with Play or Retry, or {@link Ui#idle}. Play:
  * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
  * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written on the proxy checkbox and when Options
@@ -76,7 +76,7 @@ public final class Launcher {
     private enum Outcome {
         /** Newest release installed: Play. */
         READY,
-        /** GitHub answered, channel empty: button disabled. */
+        /** GitHub answered, channel empty, nothing installed: button disabled. */
         NO_RELEASE,
         /** GitHub or download failed, a client is installed: Play. */
         INSTALLED_ANYWAY,
@@ -144,14 +144,14 @@ public final class Launcher {
         }
     }
 
-    /** Shipped launchers with <code>check.updates</code> and no <code>--no-launcher-update</code>: if
-     *  {@link #newerLauncher} finds a tag, {@link Updater#launch} and <code>System.exit(0)</code>. A failed
+    /** Shipped, {@link #released} launchers with <code>check.updates</code> and no <code>--no-launcher-update</code>:
+     *  if {@link #newerLauncher} finds a tag, {@link Updater#launch} and <code>System.exit(0)</code>. A failed
      *  launch is reported in the status line; a failed lookup is left to {@link #update} to report. */
     private void updateSelf() {
         if(!shipped)
             return;
         Updater.tidy(home);
-        if(noLauncherUpdate || !settings.checkUpdates())
+        if(!released() || noLauncherUpdate || !settings.checkUpdates())
             return;
         String tag;
         try {
@@ -204,10 +204,11 @@ public final class Launcher {
             latest = GitHubRelease.newestTag(settings.repo(), channel);
         } catch(GitHubRelease.NoReleaseException e) {
             // BETA empty = nothing published at all; RELEASE empty may have skipped a beta (e.beta, API only)
-            ui.status((channel == Channel.BETA) ? "Nothing has been published yet."
-                      : (e.beta == null) ? "No release has been published yet."
-                      : "No release has been published yet — " + e.beta + " is on the Beta channel.");
-            return Outcome.NO_RELEASE;
+            ui.status(((channel == Channel.BETA) ? "Nothing has been published yet"
+                       : (e.beta == null) ? "No release has been published yet"
+                       : "No release has been published yet — " + e.beta + " is on the Beta channel")
+                      + ((installed == null) ? "." : " — client " + installed + " is installed."));
+            return (installed == null) ? Outcome.NO_RELEASE : Outcome.INSTALLED_ANYWAY;
         } catch(Exception e) {
             ui.status((installed == null) ? "GitHub is unreachable: " + e.getMessage()
                                           : "GitHub is unreachable — client " + installed + " is installed.");
@@ -351,8 +352,10 @@ public final class Launcher {
     private static void check(Path home, Settings settings, ClientInstall client, Path javaw, boolean shipped) {
         System.out.println("home:      " + home);
         System.out.println("runtime:   " + javaw + (Files.exists(javaw) ? "" : "  (MISSING)"));
-        System.out.println("launcher:  " + version() + (shipped ? " (as shipped: kept at the channel's newest release)" : " (a development run: not updated)"));
-        if(shipped) {
+        System.out.println("launcher:  " + version() + (!shipped ? " (a development run: not updated)"
+                                                       : !released() ? " (a development build: never updated)"
+                                                       : " (as shipped: kept at the channel's newest release)"));
+        if(shipped && released()) {
             try {
                 String tag = newerLauncher(settings);
                 System.out.println("newer:     " + ((tag == null) ? "none" : tag + "  " + GitHubRelease.assetUrl(settings.launcherRepo(), tag, Updater.asset(tag))));
@@ -409,8 +412,16 @@ public final class Launcher {
         return Launcher.class.getPackage().getImplementationVersion();
     }
 
+    /** True if {@link #version} is a version a release carries (<code>6</code>, <code>5.1-beta</code>): what
+     *  <code>publish.ps1</code> stamps. False for <code>dev</code>, every other build's, which
+     *  {@link GitHubRelease#compare} would rank below any release: a development build never updates itself,
+     *  whatever folder it runs from. */
+    static boolean released() {
+        return GitHubRelease.isVersion(version());
+    }
+
     /** True if running from <code>home/launcher.jar</code> with a manifest version and <code>home/runtime/</code>
-     *  present: self-update applies. False for a development run. */
+     *  present: the shipped layout, which self-update needs. False for a development run off the build folder. */
     static boolean shipped(Path home) {
         try {
             Path jar = jar();

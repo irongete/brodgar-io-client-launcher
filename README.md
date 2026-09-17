@@ -24,9 +24,10 @@ Window: status line, progress bar, main button; console checkbox; proxy checkbox
 **Options...**; **Open client folder**. On start:
 
 0. GET the launcher's own releases (`launcher.repo`). A tag newer than the jar manifest's version starts the
-   updater and exits — see [Self-update](#self-update).
+   updater and exits — see [Self-update](#self-update). A `dev` launcher (any build without `-Dversion=`)
+   skips this step.
 1. Read `client/installed-version`. GET `https://api.github.com/repos/<repo>/releases` (one call, no token);
-   pick the highest semver tag on the channel (`v0.1.0` > `v0.1.0-beta.3`, independent of API order). If the
+   pick the highest version tag on the channel (`v6` > `v5.3-beta` > `v5`, independent of API order). If the
    API fails, follow the redirect of `github.com/<repo>/releases/latest` (latest non-prerelease). No result:
    Release channel reports "nothing published"; Beta channel reports "unreachable" (a beta cannot be
    detected via the redirect).
@@ -37,15 +38,15 @@ Window: status line, progress bar, main button; console checkbox; proxy checkbox
    start.
 3. Main button = **Play**: writes `client/haven-config.properties` (see below), runs the command from
    Options with cwd `client/`, exits. If the process ends within 3 s, an error dialog shows the exit code and
-   the tail of `client.log`. Nothing published: button disabled. GitHub unreachable with a client installed:
-   Play. Nothing installed and download failed: **Retry**.
+   the tail of `client.log`. Nothing published and nothing installed: button disabled. Nothing published, or
+   GitHub unreachable, with a client installed: Play. Nothing installed and download failed: **Retry**.
 
 **Start the client with a console window** (`console`): on, `runtime/bin/java.exe` via
 `cmd /c start /wait ... || pause`, output on the console; off, `runtime/bin/javaw.exe`, output redirected to
 `client.log`.
 
 **Channel** (`channel`): `release` = highest non-prerelease tag; `beta` = highest tag of all. The client's
-`release.ps1` publishes `x.y.z-suffix` as prerelease, `x.y.z` as release. Changing the channel re-runs step 1
+`publish.ps1` publishes `vN.X-beta` as prerelease, `vN` as release. Changing the channel re-runs step 1
 at once. Default `beta`.
 
 **Use brodgar.io resource cache proxy** (`resource.proxy`): selects `haven.resurl` in
@@ -72,7 +73,7 @@ to end, downloads `brodgar.io-client-launcher-<version>-windows.zip` into `updat
 `runtime/` cannot be replaced while in use: the new one is left as `runtime.new/` and `run.bat` swaps it in
 (two renames) on a later start when nothing runs on `runtime/`. On failure the updater shows the error and
 starts the current launcher with `--no-launcher-update`; the next start retries. Development runs (`ant run`,
-`ant check`) never self-update.
+`ant check`) and `dev` builds (`ant dist` without `-Dversion=`) never self-update.
 
 ## Settings
 
@@ -123,19 +124,42 @@ Without it, the JDK running `ant` is used (21+ with `jlink`).
 | `ant run` | the launcher with `launcher.home` = this folder (`client/`, `launcher.properties` gitignored) |
 | `ant workshop` | `build/workshop/`: `launcher.jar` + `workshop/` |
 
-`-Dversion=1.0.1` sets the version; default: `build.xml`'s, the last release's. Build output is not
-committed.
+`-Dversion=1.0.1` sets the version; without it every build is `dev`, which never updates itself. Build
+output is not committed.
 
-## Release
+### Testing locally
+
+| To see | Run |
+|---|---|
+| the launcher as a player has it: `run.bat`, `runtime/`, the client installed from GitHub into `client/` | `ant dist`, then `build\dist\Brodgar\run.bat` — version `dev`, so it never replaces itself with the published launcher |
+| the same, without the shipped layout | `ant run` — home is this folder; `client/` and `launcher.properties` appear here, ignored by git |
+| what it would do, without a window | `ant check` |
+| the self-update itself | `ant -Dversion=0.0.1 dist`, then `build\dist\Brodgar\run.bat`: an older number, so it updates to the published launcher |
+| the launcher over a client you built yourself | `check.updates=false` in `launcher.properties` (Options), and the client's `dist/` copied into `client/` |
+| an addon as you edit it | `addons.dir` (Options) pointing at the addons checkout: the client loads it from there, and `:reload` in-game reloads it |
+
+## Publish
+
+A **release** is a number, `v6`: a plain GitHub release, which every launcher installs. A **beta** is
+`v6.1-beta`, `v6.2-beta`, … — the betas since release 6: GitHub pre-releases, which only a launcher on its
+Beta channel installs. So `v5 < v5.1-beta < v5.2-beta < v6`: the Release channel counts 5, 6, 7, and the Beta
+channel sees the betas in between. The script counts from the newest version on GitHub, whichever channel it
+is on. From a clean `master`, with `git`, `ant` and `gh` (`gh auth login`) on the PATH:
 
 ```powershell
-.\release.ps1 1.0.0 -Notes etc\notes-1.0.0.md
+.\publish.ps1 -Beta         # the next beta:     v2 -> v2.1-beta, v2.1-beta -> v2.2-beta
+.\publish.ps1 -Release      # the next release:  v2.3-beta -> v3, v2 -> v3
 ```
 
-Requires a clean tree and no existing tag. Runs `ant -Dversion=1.0.0 release`, tags HEAD `v1.0.0`, pushes
-branch and tag, creates the GitHub release with the zip as asset. Notes: `-Notes <file>`, `-Message "..."`,
-or the commit subjects since the previous `v*` tag. Suffix → prerelease, plain → release (`-Channel`
-overrides). `-NoPublish` stops after the tag; `-Draft` is passed to GitHub.
+[`publish.ps1`](publish.ps1) prints the newest version on GitHub, the one it is about to publish and — for a
+release after a beta — whether `master` still holds that beta's code, and asks (`-Yes` skips the question);
+then it runs `ant -Dversion=<version> release`, tags HEAD `v<version>`, pushes branch and tag, creates the
+GitHub release with the zip as asset. Notes: `-Notes <file>`, `-Message "..."`, or the commit subjects since
+the previous version. `-NoPublish` stops after the tag; `-Draft` is passed to GitHub. Nothing published
+counts as release 0: the first beta is `v0.1-beta`, the first release `v1`. `-Version 1.0.2` names the number
+instead of counting it — the launchers installed before this scheme read `X.Y.Z` tags only, so while any is
+out there the publish they update to is `-Release -Version 1.0.2`, which reads everything after. Then
+`.\publish-steam.ps1` puts the same launcher on the Workshop — see below.
 
 ## Steam Workshop
 
@@ -164,5 +188,6 @@ Runs `ant workshop`, uploads `build\workshop\`. `workshop-id` in
 later uploads update that item (Steam's launcher re-downloads it on its next start). `-Visibility` is written
 to the file before the build; every upload applies the file's visibility, title, description and preview
 image, overwriting edits made on the item's web page. `-Version` sets the manifest version (like
-`-Dversion=`); default: newest `v*` tag reachable from HEAD. A public item needs the Workshop Legal Agreement
-accepted once on the item's web page; the tool reports when that applies.
+`-Dversion=`); without it, the version is the `v*` tag HEAD carries when the tree is clean — what
+`publish.ps1` just made — and `dev` otherwise. A public item needs the Workshop Legal Agreement accepted once
+on the item's web page; the tool reports when that applies.
