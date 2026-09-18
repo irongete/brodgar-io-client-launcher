@@ -93,7 +93,7 @@ starts the current launcher with `--no-launcher-update`; the next start retries.
 | `resource.proxy` | `false` | `haven.resurl` in `client/haven-config.properties` := `true` ? `resource.proxy.url` : `resource.url` |
 | `resource.url` | `https://game.havenandhearth.com/res/` | |
 | `resource.proxy.url` | `http://brodgar.io/res/` | |
-| `addons.dir` | *(empty)* | `haven.addondir` in `client/haven-config.properties`; empty: line removed (client default `client/addons`). The client puts `savedata/` beside that folder |
+| `addons.dir` | *(empty)* | `haven.addondir` in `client/haven-config.properties`; empty: line removed (client default `client/addons`). With it, `haven.savedatadir` = `client/savedata` is written too: the client would otherwise keep its data beside the addons folder |
 | `check.updates` | `true` | `false`: skip steps 0 and 1, offer the installed client |
 | `repo` | `irongete/brodgar-io-client` | GitHub `owner/repo` of the client releases |
 | `asset.prefix` | `brodgar.io-client-` | asset name = `<asset.prefix><tag>.zip` |

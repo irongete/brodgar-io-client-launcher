@@ -120,7 +120,8 @@ public final class Settings {
     record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, List<String> opts) {}
 
     /** Lines the launcher owns in <code>client/haven-config.properties</code>, in write order:
-     *  <code>haven.resurl</code>, <code>haven.addondir</code>. A null value means the line is removed. */
+     *  <code>haven.resurl</code>, <code>haven.addondir</code> ({@link ClientInstall#lines} adds
+     *  <code>haven.savedatadir</code>). A null value means the line is removed. */
     Map<String, String> clientConfig() {
         return clientConfig(resourceProxy(), resourceUrl(), resourceProxyUrl(), addonsDir());
     }
