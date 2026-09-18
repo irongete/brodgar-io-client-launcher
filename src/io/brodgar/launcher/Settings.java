@@ -50,8 +50,13 @@ public final class Settings {
         resource.url=https://game.havenandhearth.com/res/
         resource.proxy.url=http://brodgar.io/res/
 
-        # haven.addondir in client/haven-config.properties; empty: line removed (client default client/addons)
+        # true: haven.addondir in client/haven-config.properties := addons.dir; false: line removed (client/addons)
+        addons.override=false
         addons.dir=
+
+        # true: haven.savedatadir in client/haven-config.properties := savedata.dir; false: line removed (client/savedata)
+        savedata.override=false
+        savedata.dir=
 
         # false: no release lookup for the launcher or the client
         check.updates=true
@@ -108,7 +113,11 @@ public final class Settings {
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
     String resourceUrl()      {return get("resource.url", "https://game.havenandhearth.com/res/");}
     String resourceProxyUrl() {return get("resource.proxy.url", "http://brodgar.io/res/");}
+    /** Absent from a file written before the flag existed: on when a folder is set. */
+    boolean addonsOverride()  {return "true".equalsIgnoreCase(get("addons.override", addonsDir().isBlank() ? "false" : "true"));}
     String addonsDir()        {return get("addons.dir", "");}
+    boolean savedataOverride() {return "true".equalsIgnoreCase(get("savedata.override", "false"));}
+    String savedataDir()      {return get("savedata.dir", "");}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
 
     /** {@link Launch} from the current values. */
@@ -120,16 +129,19 @@ public final class Settings {
     record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, List<String> opts) {}
 
     /** Lines the launcher owns in <code>client/haven-config.properties</code>, in write order:
-     *  <code>haven.resurl</code>, <code>haven.addondir</code>. A null value means the line is removed. */
+     *  <code>haven.resurl</code>, <code>haven.addondir</code>, <code>haven.savedatadir</code>. A null value
+     *  means the line is removed: an override that is off, or on with no folder. */
     Map<String, String> clientConfig() {
-        return clientConfig(resourceProxy(), resourceUrl(), resourceProxyUrl(), addonsDir());
+        return clientConfig(resourceProxy(), resourceUrl(), resourceProxyUrl(),
+                            addonsOverride() ? addonsDir() : "", savedataOverride() ? savedataDir() : "");
     }
 
-    /** {@link #clientConfig()} from explicit values. */
-    static Map<String, String> clientConfig(boolean proxy, String url, String proxyUrl, String addonsDir) {
+    /** {@link #clientConfig()} from explicit values; a blank folder is no override. */
+    static Map<String, String> clientConfig(boolean proxy, String url, String proxyUrl, String addonsDir, String savedataDir) {
         Map<String, String> m = new LinkedHashMap<>();
         m.put("haven.resurl", proxy ? proxyUrl : url);
         m.put("haven.addondir", addonsDir.isBlank() ? null : addonsDir.trim());
+        m.put("haven.savedatadir", savedataDir.isBlank() ? null : savedataDir.trim());
         return m;
     }
 

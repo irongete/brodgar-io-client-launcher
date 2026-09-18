@@ -56,8 +56,9 @@ line is rewritten; the rest of the file is kept. Not passed on the command line.
 
 **Open client folder**: opens `client/` in Explorer.
 
-**Options...**: `heap`, `heap.pretouch`, `gc`, `ui.scale`, `ipv6`, `java.opts`, `resource.proxy.url`,
-`addons.dir`, `check.updates` — see [Settings](#settings) — with a live preview of the resulting command.
+**Options...**: `heap`, `heap.pretouch`, `gc`, `ui.scale`, `ipv6`, `java.opts`, `resource.proxy.url`, the
+two folder overrides, `check.updates` — see [Settings](#settings) — with a live preview of the resulting
+command.
 Not configurable: `--add-exports`/`--enable-native-access`/`--sun-misc-unsafe-memory-access=allow`.
 
 Locale: English only; the runtime carries no other locale data.
@@ -93,7 +94,10 @@ starts the current launcher with `--no-launcher-update`; the next start retries.
 | `resource.proxy` | `false` | `haven.resurl` in `client/haven-config.properties` := `true` ? `resource.proxy.url` : `resource.url` |
 | `resource.url` | `https://game.havenandhearth.com/res/` | |
 | `resource.proxy.url` | `http://brodgar.io/res/` | |
-| `addons.dir` | *(empty)* | `haven.addondir` in `client/haven-config.properties`; empty: line removed (client default `client/addons`). The client's data stays in `client/savedata/` either way |
+| `addons.override` | `false` | *Override addons folder*: `true` writes `haven.addondir` = `addons.dir` into `client/haven-config.properties`; `false` removes the line (client default `client/addons`). Absent, it is `true` when `addons.dir` is set |
+| `addons.dir` | *(empty)* | the folder |
+| `savedata.override` | `false` | *Override savedata folder*: `true` writes `haven.savedatadir` = `savedata.dir`; `false` removes the line (client default `client/savedata`) |
+| `savedata.dir` | *(empty)* | the folder |
 | `check.updates` | `true` | `false`: skip steps 0 and 1, offer the installed client |
 | `repo` | `irongete/brodgar-io-client` | GitHub `owner/repo` of the client releases |
 | `asset.prefix` | `brodgar.io-client-` | asset name = `<asset.prefix><tag>.zip` |
@@ -136,7 +140,7 @@ output is not committed.
 | what it would do, without a window | `ant check` |
 | the self-update itself | `ant -Dversion=0.0.1 dist`, then `build\dist\Brodgar\run.bat`: an older number, so it updates to the published launcher |
 | the launcher over a client you built yourself | `check.updates=false` in `launcher.properties` (Options), and the client's `dist/` copied into `client/` |
-| an addon as you edit it | `addons.dir` (Options) pointing at the addons checkout: the client loads it from there, and `:reload` in-game reloads it |
+| an addon as you edit it | *Override addons folder* (Options) pointing at the addons checkout: the client loads it from there, and `:reload` in-game reloads it |
 
 ## Publish
 

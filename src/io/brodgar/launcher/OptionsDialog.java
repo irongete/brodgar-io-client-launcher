@@ -69,7 +69,14 @@ final class OptionsDialog {
         ipv6.setSelectedIndex(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
         JTextField opts = new JTextField(settings.javaOptsText(), 30);
         JTextField proxyUrl = new JTextField(settings.resourceProxyUrl(), 30);
+        JCheckBox addonsOverride = new JCheckBox("Override addons folder", settings.addonsOverride());
         JTextField addonsDir = new JTextField(settings.addonsDir(), 30);
+        addonsDir.setEnabled(addonsOverride.isSelected());
+        addonsOverride.addActionListener(ev -> addonsDir.setEnabled(addonsOverride.isSelected()));
+        JCheckBox savedataOverride = new JCheckBox("Override savedata folder", settings.savedataOverride());
+        JTextField savedataDir = new JTextField(settings.savedataDir(), 30);
+        savedataDir.setEnabled(savedataOverride.isSelected());
+        savedataOverride.addActionListener(ev -> savedataDir.setEnabled(savedataOverride.isSelected()));
         JCheckBox updates = new JCheckBox("Look for a newer launcher and game when the launcher opens", settings.checkUpdates());
 
         JTextArea preview = new JTextArea(5, 64);
@@ -110,8 +117,10 @@ final class OptionsDialog {
               "Appended to the JVM command line, space-separated");
         r.add("Resource cache address", proxyUrl,
               "haven.resurl in client/haven-config.properties while the proxy checkbox is on");
-        r.add("Addons folder", addonsDir,
-              "haven.addondir in client/haven-config.properties; empty: client/addons. savedata/ sits beside it");
+        r.labelled(addonsOverride, addonsDir,
+              "haven.addondir in client/haven-config.properties; off: client/addons");
+        r.labelled(savedataOverride, savedataDir,
+              "haven.savedatadir in client/haven-config.properties; off: client/savedata");
         r.add(null, updates,
               "check.updates: GitHub release lookup for the launcher and the client at start");
         r.preview("The game will be started as:", new JScrollPane(preview));
@@ -126,7 +135,10 @@ final class OptionsDialog {
             settings.set("ipv6", switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; });
             settings.set("java.opts", opts.getText().trim());
             settings.set("resource.proxy.url", proxyUrl.getText().trim());
+            settings.set("addons.override", String.valueOf(addonsOverride.isSelected()));
             settings.set("addons.dir", addonsDir.getText().trim());
+            settings.set("savedata.override", String.valueOf(savedataOverride.isSelected()));
+            settings.set("savedata.dir", savedataDir.getText().trim());
             settings.set("check.updates", String.valueOf(updates.isSelected()));
             d.dispose();
         });
@@ -171,7 +183,8 @@ final class OptionsDialog {
         return 0;
     }
 
-    /** GridBag rows: label + control, then a help line spanning both columns. */
+    /** GridBag rows: label (a name, or a checkbox that governs the control) + control, then a help line
+     *  spanning both columns. */
     private static final class Row {
         private final JPanel form;
         private final GridBagConstraints c = new GridBagConstraints();
@@ -183,16 +196,20 @@ final class OptionsDialog {
         }
 
         void add(String name, JComponent field, String what) {
+            labelled((name == null) ? null : new JLabel(name), field, what);
+        }
+
+        /** The row with <code>label</code> in the first column: a name, or the checkbox that governs the control. */
+        void labelled(JComponent label, JComponent field, String what) {
             c.insets = new Insets(8, 4, 0, 4);
             c.gridy = y++;
             c.fill = GridBagConstraints.NONE;
             c.weightx = 0;
-            if(name != null) {
+            if(label != null) {
                 c.gridx = 0;
                 c.gridwidth = 1;
-                JLabel l = new JLabel(name);
-                l.setFont(l.getFont().deriveFont(Font.BOLD));
-                form.add(l, c);
+                label.setFont(label.getFont().deriveFont(Font.BOLD));
+                form.add(label, c);
                 c.gridx = 1;
             } else {
                 c.gridx = 0;
