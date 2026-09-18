@@ -376,7 +376,7 @@ public final class Launcher {
             System.out.println("newest:    unreachable: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
-        System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(client.lines(settings.clientConfig())).replace(System.lineSeparator(), "  "));
+        System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
         System.out.println("command:   " + String.join(" ", command(javaw, settings)));
         if(settings.console())

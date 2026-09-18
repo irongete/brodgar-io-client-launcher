@@ -3,7 +3,6 @@ package io.brodgar.launcher;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -64,22 +63,12 @@ final class ClientInstall {
         return dir.resolve("haven-config.properties");
     }
 
-    /** {@link Settings#writeLine} for each entry of {@link #lines} on {@link #config()} (null value = line
+    /** {@link Settings#writeLine} for each entry of <code>config</code> on {@link #config()} (null value = line
      *  removed). No-op while {@link #isInstalled()} is false. */
-    void configure(Map<String, String> settings) throws IOException {
+    void configure(Map<String, String> config) throws IOException {
         if(!isInstalled())
             return;
-        for(Map.Entry<String, String> e : lines(settings).entrySet())
+        for(Map.Entry<String, String> e : config.entrySet())
             Settings.writeLine(config(), e.getKey(), e.getValue());
-    }
-
-    /** The launcher's lines of the client's file: <code>settings</code> ({@link Settings#clientConfig}) plus
-     *  <code>haven.savedatadir</code> whenever they name another addons folder — the client would otherwise
-     *  keep its data beside that folder, and the launcher's promise is that it stays in <code>savedata/</code>
-     *  here. Removed when no addons folder is named: the client's default is that same place. */
-    Map<String, String> lines(Map<String, String> settings) {
-        Map<String, String> all = new LinkedHashMap<>(settings);
-        all.put("haven.savedatadir", (settings.get("haven.addondir") == null) ? null : dir.resolve("savedata").toAbsolutePath().toString());
-        return all;
     }
 }
