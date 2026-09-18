@@ -20,7 +20,8 @@
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
   <!-- The release asset: what the launcher downloads to update itself, so Updater.java names it the same way. -->
-  <property name="asset" value="brodgar.io-launcher-v${version}.zip" />
+  <!-- No version in the name: the folder a player unzips keeps its name while the launcher inside updates itself. -->
+  <property name="asset" value="brodgar.io-launcher.zip" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
        handshake wants on a JDK before 22 (an empty module after), jdk.management, which the Options
        dialog reads the machine's memory through, and java.sql, which the addon store's SQLite driver

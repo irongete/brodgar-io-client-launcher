@@ -120,7 +120,7 @@ $title = "$product $tag"
 if ($newest -and $current -eq 'master' -and (Parse-Version $Version).Key -le $newest.Version.Key) {
     throw "$tag is not above $($newest.Tag), the newest on GitHub, and a launcher never installs a lower version: name one above it, or leave -Version out"
 }
-$asset = Join-Path 'build' "brodgar.io-launcher-$tag.zip"
+$asset = Join-Path 'build' 'brodgar.io-launcher.zip'   # no version in the name: the unzipped folder outlives it
 if (git tag -l $tag) { throw "the tag $tag already exists in this clone" }
 if ($needsGitHub -and ($published | Where-Object { $_.Tag -eq $tag })) { throw "$tag is published on GitHub already" }
 if (-not $NoPublish -and (git ls-remote --tags origin $tag)) { throw "the tag $tag already exists on origin" }

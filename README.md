@@ -4,7 +4,7 @@ Installs and updates the [brodgar.io client](https://github.com/irongete/brodgar
 releases, updates itself the same way, and starts the client on the bundled Java runtime.
 
 ```text
-brodgar.io-launcher-<tag>/   the zip's contents, at its root
+brodgar.io-launcher/     the zip's contents, at its root (the zip carries no version: this folder outlives many)
   run.bat                starts launcher.jar on runtime/
   launcher.jar
   runtime/               jlink runtime; runs the launcher and the client
@@ -67,7 +67,7 @@ Locale: English only; the runtime carries no other locale data.
 
 If step 0 finds a newer tag, the launcher copies `launcher.jar` to `update/` (the running jar is locked),
 starts `io.brodgar.launcher.Updater` from that copy and exits. The updater waits for the launcher process
-to end, downloads `brodgar.io-launcher-<tag>.zip` into `update/`, unpacks it, moves
+to end, downloads `brodgar.io-launcher.zip` of that release into `update/`, unpacks it, moves
 `launcher.jar` and `run.bat` into place (atomic move each), restarts the launcher, which deletes `update/`.
 `client/` is not touched.
 
@@ -123,7 +123,7 @@ Without it, the JDK running `ant` is used (21+ with `jlink`).
 | `ant jar` | `build/launcher.jar` (version in the manifest) |
 | `ant runtime` | `build/runtime/`: `jlink` of the modules `jdeps` reports for `hafen.jar` and its libraries |
 | `ant dist` | `build/dist/Brodgar/`: `launcher.jar`, `run.bat`, `runtime/` |
-| `ant release` | `build/brodgar.io-launcher-<tag>.zip`: the `dist` folder's contents at the zip root |
+| `ant release` | `build/brodgar.io-launcher.zip`: the `dist` folder's contents at the zip root |
 | `ant check` | `--check` with `launcher.home` = this folder |
 | `ant run` | the launcher with `launcher.home` = this folder (`client/`, `launcher.properties` gitignored) |
 | `ant workshop` | `build/workshop/`: `launcher.jar` + `workshop/` |

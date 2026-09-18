@@ -39,8 +39,9 @@ import javax.swing.WindowConstants;
  */
 public final class Updater {
     private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** Asset name parts, as build.xml: <code>brodgar.io-launcher-&lt;tag&gt;.zip</code>. */
-    private static final String ASSET_PREFIX = "brodgar.io-launcher-", ASSET_SUFFIX = ".zip";
+    /** The release asset, as build.xml names it: the same for every release, since the folder a player unzips
+     *  keeps its name while the launcher inside updates itself. */
+    static final String ASSET = "brodgar.io-launcher.zip";
 
     private final Path home;
     private final JFrame frame;
@@ -162,11 +163,6 @@ public final class Updater {
     }
 
     // ---- called by the launcher --------------------------------------------------------------------------------
-
-    /** Asset name for <code>tag</code>: <code>brodgar.io-launcher-v2.zip</code> for <code>v2</code>. */
-    static String asset(String tag) {
-        return ASSET_PREFIX + tag + ASSET_SUFFIX;
-    }
 
     /** Copy <code>launcher.jar</code> to <code>update/updater.jar</code> and start {@link #main} from it with
      *  this process's pid. An updater that exits within 1 s is an <code>IOException</code>. The caller exits. */
