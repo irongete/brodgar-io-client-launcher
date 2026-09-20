@@ -12,9 +12,11 @@ import java.util.List;
 /**
  * Steam Workshop entry point, named by <code>workshop/workshop-client.properties</code>. Haven &amp; Hearth's
  * Steam launcher loads <code>launcher.jar</code> into its own JVM and calls <code>main</code>, which starts
- * {@link Launcher} as a child process — same Java (Steam's runtime; it runs the client too), same environment
- * (<code>SteamAppId</code> etc., needed for the client's Steam login), <code>-Dlauncher.home=%LOCALAPPDATA%\Brodgar.io</code>,
- * stdout/stderr to <code>launcher.log</code> there — and returns. 2 s later it calls <code>System.exit(0)</code>:
+ * {@link Launcher} as a child process — same Java (Steam's runtime; it runs the client too) with the item's
+ * JavaFX on the module path (<code>javafx/</code>, the OpenJFX SDK: the window is JavaFX and Steam's Java has
+ * none), same environment (<code>SteamAppId</code> etc., needed for the client's Steam login),
+ * <code>-Dlauncher.home=%LOCALAPPDATA%\Brodgar.io</code>, stdout/stderr to <code>launcher.log</code> there —
+ * and returns. 2 s later it calls <code>System.exit(0)</code>:
  * the host JVM has no AWT auto-shutdown and keeps its Steam API session open, so Steam would otherwise show the
  * game as running indefinitely.
  *
@@ -32,6 +34,10 @@ public final class Workshop {
             Files.createDirectories(home);
             List<String> cmd = new ArrayList<>();
             cmd.add(java(home).toString());
+            cmd.add("--module-path");
+            cmd.add(jar.resolveSibling("javafx").resolve("lib").toString());
+            cmd.add("--add-modules");
+            cmd.add("javafx.controls,javafx.media");
             cmd.add("-Dlauncher.home=" + home);
             cmd.add("-jar");
             cmd.add(jar.toString());

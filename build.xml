@@ -10,10 +10,21 @@
      The JDK matters twice. It is the runtime the player gets, so it is the one the client is verified on
      (a Temurin LTS, 25 today); and it has to carry jlink, so it is a JDK, not a JRE. It is `jdk.home` in
      build.properties, a JDK unpacked in this folder (jdk-*, ignored by git), and every step of the build
-     runs on it: javac, jlink, and the development runs. Without that line it is the JDK ant itself runs on. -->
+     runs on it: javac and jlink. Without that line it is the JDK ant itself runs on.
+
+     The window is JavaFX (the trailer plays in JavaFX Media), and the JDK has no JavaFX: `javafx.home` in
+     build.properties is the OpenJFX jmods of the same major version (javafx-jmods-*, unpacked in this folder,
+     ignored by git). javac compiles against them and jlink puts them in the runtime. Nothing runs on jmods, so
+     the development runs (`run`, `check`) go on the runtime the build just cut. The Workshop item runs on
+     Steam's Java instead, so it carries the OpenJFX SDK of the same version, `javafx.sdk` (javafx-sdk-*,
+     likewise), on its module path. The trailer itself, etc/trailer.mp4 and its poster, travels beside the jar
+     in every layout, the build folder included. -->
 <project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
+  <property name="javafx.home" value="javafx-jmods" />
+  <property name="javafx.sdk" value="javafx-sdk" />
+  <property name="javafx.modules" value="javafx.controls,javafx.media" />
   <!-- The version is what publish.ps1 passes (-Dversion=1.2.3) and `dev` for every other build. It lands in the
        jar's manifest, where the launcher reads it back: a `dev` launcher never updates itself. -->
   <property name="version" value="dev" />
@@ -25,32 +36,45 @@
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
        handshake wants on a JDK before 22 (an empty module after), jdk.management, which the Options
        dialog reads the machine's memory through, and java.sql, which the addon store's SQLite driver
-       (sqlite-jdbc) is written against. English only: no jdk.localedata. -->
-  <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,java.sql,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.management" />
+       (sqlite-jdbc) is written against. English only: no jdk.localedata. Then the launcher's own: JavaFX, the
+       window and the trailer's player. -->
+  <property name="modules" value="java.base,java.desktop,java.logging,java.management,java.net.http,java.prefs,java.scripting,java.sql,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.management,${javafx.modules}" />
 
   <target name="compile">
     <mkdir dir="build/classes" />
     <javac srcdir="src" destdir="build/classes" release="21" debug="on" includeantruntime="no"
 	   fork="yes" executable="${jdk.home}/bin/javac">
       <compilerarg value="-Xlint:all" />
+      <compilerarg value="--module-path" />
+      <compilerarg value="${javafx.home}" />
+      <compilerarg value="--add-modules" />
+      <compilerarg value="${javafx.modules}" />
     </javac>
   </target>
 
-  <!-- The version travels in the manifest: the window title reads it back as Implementation-Version. -->
+  <!-- The version travels in the manifest: the window title reads it back as Implementation-Version. The window
+       icon rides in the jar beside the classes; the trailer's files go beside the jar, where the launcher looks
+       for them. -->
   <target name="jar" depends="compile">
     <jar destfile="build/launcher.jar">
       <fileset dir="build/classes" />
+      <zipfileset dir="etc" includes="icon.png" prefix="io/brodgar/launcher" />
       <manifest>
         <attribute name="Main-Class" value="${main.class}" />
         <attribute name="Implementation-Title" value="brodgar.io launcher" />
         <attribute name="Implementation-Version" value="${version}" />
       </manifest>
     </jar>
+    <copy todir="build">
+      <fileset dir="etc" includes="trailer.*" />
+    </copy>
   </target>
 
   <target name="runtime">
     <delete dir="build/runtime" />
     <exec executable="${jdk.home}/bin/jlink" failonerror="true">
+      <arg value="--module-path" />
+      <arg value="${javafx.home}" />
       <arg value="--add-modules" />
       <arg value="${modules}" />
       <arg value="--strip-debug" />
@@ -63,11 +87,14 @@
     </exec>
   </target>
 
-  <!-- The folder handed to a player: the jar, run.bat (CRLF, as a .bat is read), and the runtime. -->
+  <!-- The folder handed to a player: the jar, the trailer, run.bat (CRLF, as a .bat is read), and the runtime. -->
   <target name="dist" depends="jar, runtime">
     <delete dir="build/dist" />
     <mkdir dir="build/dist/${app.name}" />
     <copy file="build/launcher.jar" todir="build/dist/${app.name}" />
+    <copy todir="build/dist/${app.name}">
+      <fileset dir="etc" includes="trailer.*" />
+    </copy>
     <fixcrlf srcdir="etc" includes="run.bat" destdir="build/dist/${app.name}" eol="crlf" />
     <copy todir="build/dist/${app.name}/runtime">
       <fileset dir="build/runtime" />
@@ -75,7 +102,8 @@
     <echo message="Launcher ready: build/dist/${app.name}/run.bat" />
   </target>
 
-  <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), the whole folder
+  <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), the trailer, and
+       the OpenJFX SDK as javafx/ (lib/ on the module path, bin/ its DLLs, found from there), the whole folder
        being what the client's upload tool sends (README.md, "Steam Workshop"). No runtime: on Steam the
        launcher runs on the Java Steam ships with the game, and so does the client. -->
   <target name="workshop" depends="jar">
@@ -83,7 +111,13 @@
     <mkdir dir="build/workshop" />
     <copy file="build/launcher.jar" todir="build/workshop" />
     <copy todir="build/workshop">
+      <fileset dir="etc" includes="trailer.*" />
+    </copy>
+    <copy todir="build/workshop">
       <fileset dir="workshop" />
+    </copy>
+    <copy todir="build/workshop/javafx">
+      <fileset dir="${javafx.sdk}" excludes="src.zip" />
     </copy>
     <echo message="Workshop item ready: build/workshop/" />
   </target>
@@ -95,16 +129,16 @@
     <echo message="Release asset: build/${asset}" />
   </target>
 
-  <!-- Development: the launcher on the build JDK, its folder being this one (client/ and launcher.properties
+  <!-- Development: the launcher on the runtime, its folder being this one (client/ and launcher.properties
        appear here and are ignored by git). `ant check` resolves the release and prints the command instead. -->
-  <target name="run" depends="jar">
-    <java jar="build/launcher.jar" fork="true" jvm="${jdk.home}/bin/java">
+  <target name="run" depends="jar, runtime">
+    <java jar="build/launcher.jar" fork="true" jvm="build/runtime/bin/java">
       <sysproperty key="launcher.home" value="${basedir}" />
     </java>
   </target>
 
-  <target name="check" depends="jar">
-    <java jar="build/launcher.jar" fork="true" jvm="${jdk.home}/bin/java">
+  <target name="check" depends="jar, runtime">
+    <java jar="build/launcher.jar" fork="true" jvm="build/runtime/bin/java">
       <sysproperty key="launcher.home" value="${basedir}" />
       <arg value="--check" />
     </java>

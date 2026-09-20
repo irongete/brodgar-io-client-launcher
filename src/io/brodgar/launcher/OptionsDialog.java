@@ -40,9 +40,11 @@ final class OptionsDialog {
     /** Heap slider: <code>MIN_GB</code> to <code>max(MIN_GB + 1, min(CAP_GB, totalGb / 2))</code>. */
     static final int MIN_GB = 1, CAP_GB = 16;
 
-    /** Show modally; returns on close. <code>java</code> is the executable the preview starts with. */
+    /** Show modally; returns on close. <code>java</code> is the executable the preview starts with. No owner: the
+     *  main window is JavaFX, which Swing's modality does not reach ({@link Ui#swingDialog}). */
     static void show(JFrame owner, Settings settings, Path java) {
         JDialog d = new JDialog(owner, "Options", true);
+        d.setIconImage(Launcher.icon());
 
         long totalGb = totalMemoryGb();
         int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB + 1, Math.min(CAP_GB, totalGb / 2));

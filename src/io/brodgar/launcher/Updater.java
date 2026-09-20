@@ -29,8 +29,8 @@ import javax.swing.WindowConstants;
  * Launcher self-update, a separate process. {@link #launch} copies <code>launcher.jar</code> to
  * <code>update/updater.jar</code> (the running jar is locked) and starts this class from it; the launcher then
  * exits. {@link #main}: wait for the launcher pid, download the release zip into <code>update/</code>, unpack,
- * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code> and
- * <code>launcher.jar</code> into <code>home</code>, start the launcher, exit. <code>run.bat</code> swaps
+ * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code>,
+ * <code>launcher.jar</code> and the trailer's files into <code>home</code>, start the launcher, exit. <code>run.bat</code> swaps
  * <code>runtime.new/</code> in on a later start (the runtime cannot be replaced while this process and the game
  * run on it). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
  *
@@ -39,6 +39,8 @@ import javax.swing.WindowConstants;
  */
 public final class Updater {
     private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
+    /** What moves into <code>home</code> besides the runtime: the trailer's files when the zip has them. */
+    private static final List<String> FILES = List.of(BAT, JAR, Trailer.VIDEO, Trailer.POSTER);
     /** The release asset, as build.xml names it: the same for every release, since the folder a player unzips
      *  keeps its name while the launcher inside updates itself. */
     static final String ASSET = "brodgar.io-launcher.zip";
@@ -56,6 +58,7 @@ public final class Updater {
             // cross-platform look and feel then
         }
         frame = new JFrame("brodgar.io launcher v" + version);
+        frame.setIconImage(Launcher.icon());
         status = new JLabel("Waiting for the launcher to close...");
         bar = new JProgressBar(0, 1000);
         bar.setIndeterminate(true);
@@ -101,7 +104,7 @@ public final class Updater {
     }
 
     /** Wait for <code>pid</code>; download and unpack into <code>update/</code>; verify <code>launcher.jar</code>
-     *  and <code>runtime/bin/javaw.exe</code> are there; move runtime, bat, jar into place. */
+     *  and <code>runtime/bin/javaw.exe</code> are there; move runtime and {@link #FILES} into place. */
     private void install(long pid, String version, String url) throws IOException, InterruptedException {
         waitFor(pid);
         Path dir = home.resolve(STAGING);
@@ -116,8 +119,9 @@ public final class Updater {
         Path staged = home.resolve(RUNTIME + ".new");
         deleteTree(staged);
         Files.move(dir.resolve(RUNTIME), staged, StandardCopyOption.ATOMIC_MOVE);
-        Files.move(dir.resolve(BAT), home.resolve(BAT), StandardCopyOption.ATOMIC_MOVE);
-        Files.move(dir.resolve(JAR), home.resolve(JAR), StandardCopyOption.ATOMIC_MOVE);
+        for(String f : FILES)
+            if(Files.exists(dir.resolve(f)))
+                Files.move(dir.resolve(f), home.resolve(f), StandardCopyOption.ATOMIC_MOVE);
     }
 
     /** Wait up to 60 s for <code>pid</code> to exit; <code>IOException</code> after that. */

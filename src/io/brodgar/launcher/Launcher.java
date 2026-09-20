@@ -17,10 +17,14 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  *   run.bat                starts launcher.jar on runtime/
  *   launcher.jar
+ *   trailer.mp4            the trailer and its poster, beside the jar ({@link Trailer})
+ *   trailer.jpg
  *   runtime/               jlink runtime; runs the launcher and the client
  *   client/                the client release: hafen.jar, lib/, resource jars, addons/, haven-config.properties
  *   client/savedata/       client data; never written by the launcher
  *   client/installed-version
+ *   cache/release/         the newest client zip downloaded on each channel: switching back needs no download
+ *   cache/beta/
  *   launcher.properties    {@link Settings}; created with defaults on first run
  *   client.log             stdout/stderr of the last client run
  * </pre>
@@ -30,7 +34,8 @@ import java.util.concurrent.TimeUnit;
  * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
  * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written on the proxy checkbox and when Options
  * closes — an unpacked release restores the zip's copy), then {@link #command} runs with cwd <code>client/</code>
- * and the launcher exits. <code>--check</code>: resolve and print, no window, no writes.
+ * and the launcher stays, Play disabled until the client exits. <code>--check</code>: resolve and print, no
+ * window, no writes.
  * <code>--no-launcher-update</code>: skip {@link #updateSelf}.
  */
 public final class Launcher {
@@ -59,7 +64,7 @@ public final class Launcher {
         boolean check = a.contains("--check");
         Path home = home();
         Settings settings = Settings.load(home.resolve("launcher.properties"), !check);
-        ClientInstall client = new ClientInstall(home.resolve("client"));
+        ClientInstall client = new ClientInstall(home.resolve("client"), home.resolve("cache"));
         Path javaw = javaw(home);
         boolean shipped = shipped(home);
         if(check) {
@@ -67,7 +72,8 @@ public final class Launcher {
             return;
         }
         Launcher[] l = new Launcher[1];
-        Ui ui = Ui.open(title(null), settings, c -> l[0].channel(c), on -> l[0].proxy(on), () -> l[0].options(), () -> l[0].clientFolder());
+        Path jar = jar();
+        Ui ui = Ui.open(TITLE, settings, (jar != null) ? jar.getParent() : home, c -> l[0].channel(c), on -> l[0].proxy(on), () -> l[0].options(), () -> l[0].clientFolder());
         l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
@@ -76,7 +82,7 @@ public final class Launcher {
     private enum Outcome {
         /** Newest release installed: Play. */
         READY,
-        /** GitHub answered, channel empty, nothing installed: button disabled. */
+        /** GitHub answered, channel empty: button disabled, whatever is installed (it is another channel's). */
         NO_RELEASE,
         /** GitHub or download failed, a client is installed: Play. */
         INSTALLED_ANYWAY,
@@ -96,10 +102,9 @@ public final class Launcher {
         configure();
     }
 
-    /** Options button callback: modal dialog, then write the client's file. */
+    /** Options button callback: the modal Swing dialog beside the window, then write the client's file. */
     private void options() {
-        OptionsDialog.show(ui.frame(), settings, exe(javaw, settings));
-        configure();
+        ui.swingDialog(() -> OptionsDialog.show(null, settings, exe(javaw, settings)), this::configure);
     }
 
     /** {@link ClientInstall#configure} from the settings; an <code>IOException</code> goes to the status line. */
@@ -111,8 +116,7 @@ public final class Launcher {
         }
     }
 
-    /** Open client folder callback: <code>Desktop.open(client/)</code>; error dialog if absent (directly, on the
-     *  event thread: {@link Ui#error} would deadlock). */
+    /** Open client folder callback: <code>Desktop.open(client/)</code>; error dialog if absent. */
     private void clientFolder() {
         Path dir = client.dir();
         try {
@@ -120,12 +124,11 @@ public final class Launcher {
                 throw new IOException("no client is installed yet, so " + dir + " does not exist");
             java.awt.Desktop.getDesktop().open(dir.toFile());
         } catch(IOException | RuntimeException e) {
-            javax.swing.JOptionPane.showMessageDialog(ui.frame(), "The client folder could not be opened: " + e.getMessage(), ui.frame().getTitle(), javax.swing.JOptionPane.ERROR_MESSAGE);
+            ui.error("The client folder could not be opened: " + e.getMessage());
         }
     }
 
-    /** {@link #updateSelf}, {@link #update}, then the button state per {@link Outcome}. The title carries the
-     *  client version only when Play is offered. */
+    /** {@link #updateSelf}, {@link #update}, then the button state per {@link Outcome}. */
     private void prepare() {
         ui.busy();
         Outcome o;
@@ -136,7 +139,6 @@ public final class Launcher {
             ui.status("Unexpected: " + e);
             o = client.isInstalled() ? Outcome.INSTALLED_ANYWAY : Outcome.NOTHING;
         }
-        ui.title(title((o == Outcome.READY || o == Outcome.INSTALLED_ANYWAY) ? client.installedVersion() : null));
         switch(o) {
             case READY, INSTALLED_ANYWAY -> ui.ready("Play", this::play);
             case NO_RELEASE -> ui.idle();
@@ -204,12 +206,8 @@ public final class Launcher {
             ui.status("Looking for the newest " + kind + "...");
             latest = GitHubRelease.newestTag(settings.repo(), channel);
         } catch(GitHubRelease.NoReleaseException e) {
-            // BETA empty = nothing published at all; RELEASE empty may have skipped a beta (e.beta, API only)
-            ui.status(((channel == Channel.BETA) ? "Nothing has been published yet"
-                       : (e.beta == null) ? "No release has been published yet"
-                       : "No release has been published yet — " + e.beta + " is on the Beta channel")
-                      + ((installed == null) ? "." : " — client " + installed + " is installed."));
-            return (installed == null) ? Outcome.NO_RELEASE : Outcome.INSTALLED_ANYWAY;
+            ui.status("No " + kind + " has been published yet.");
+            return Outcome.NO_RELEASE;
         } catch(Exception e) {
             ui.status((installed == null) ? "GitHub is unreachable: " + e.getMessage()
                                           : "GitHub is unreachable — client " + installed + " is installed.");
@@ -219,46 +217,63 @@ public final class Launcher {
             ui.status("Client " + installed + " is the newest " + kind + ".");
             return Outcome.READY;
         }
+        String asset = settings.assetPrefix() + latest + ".zip";
+        Path zip = client.cached(asset);
         try {
-            String url = GitHubRelease.assetUrl(settings.repo(), latest, settings.assetPrefix() + latest + ".zip");
-            ui.status((installed == null) ? "Downloading client " + latest + " (" + kind + ")..." : "Installing " + latest + " (" + kind + ") over " + installed + "...");
-            Files.createDirectories(client.dir());
-            Path zip = client.download();
-            GitHubRelease.download(url, zip, ui::progress);
+            if(zip == null) {
+                String url = GitHubRelease.assetUrl(settings.repo(), latest, asset);
+                ui.status("Downloading client " + latest + " (" + kind + ")...");
+                zip = client.cache(channel, asset);
+                GitHubRelease.download(url, zip, ui::progress);
+                client.prune(zip);
+            }
             ui.status("Installing client " + latest + "...");
+            Files.createDirectories(client.dir());
             client.install(zip, latest);
-            Files.deleteIfExists(zip);
             ui.status("Client " + latest + " is ready.");
             return Outcome.READY;
         } catch(Exception e) {
             ui.status((installed == null) ? "The download failed: " + e.getMessage()
                                           : "The update failed (" + e.getMessage() + ") — client " + installed + " is installed.");
+            if(zip != null) {
+                try {
+                    Files.deleteIfExists(zip);           // a zip that would not install is not kept for next time
+                } catch(IOException io) {
+                    // locked: the next attempt tries it again
+                }
+            }
             return (installed == null) ? Outcome.NOTHING : Outcome.INSTALLED_ANYWAY;
         }
     }
 
-    /** Play: configure the client's file, {@link #start}, exit — unless the process ends within 3 s: error
-     *  dialog with the exit code and the log tail, stay. With the console on, the <code>pause</code> keeps the
-     *  process alive, so the error is shown there instead. */
+    /** Play: configure the client's file, pause the trailer, {@link #start}, and stay: the button and the
+     *  dropdown disabled while the client runs (its files are in use), offered again when it exits — unless the
+     *  process ends within 3 s: error dialog with the exit code and the log tail. With the console on, the
+     *  <code>pause</code> keeps the process alive, so the error is shown there instead. */
     private void play() {
         ui.busy();
         ui.status("Starting the client...");
+        Process p;
         try {
             client.configure(settings.clientConfig());
-            Process p = start();
+            ui.pauseTrailer();
+            p = start();
             if(p.waitFor(3, TimeUnit.SECONDS)) {
                 ui.error("The client exited at once (code " + p.exitValue() + ").\n\n" + tail(home.resolve("client.log"), 12));
                 ui.status("The client did not start.");
                 ui.ready("Play", this::play);
                 return;
             }
-            ui.close();
-            System.exit(0);
+            ui.status("The client is running.");
+            p.waitFor();
         } catch(Exception e) {
             ui.error(e.toString());
             ui.status("The client did not start.");
             ui.ready("Play", this::play);
+            return;
         }
+        ui.status((p.exitValue() == 0) ? "The client has exited." : "The client exited with code " + p.exitValue() + ".");
+        ui.ready("Play", this::play);
     }
 
     /** Start the client in <code>client/</code>: {@link #command} with stdout/stderr to <code>client.log</code>,
@@ -393,6 +408,23 @@ public final class Launcher {
         return (jar != null) ? jar.getParent() : Paths.get("").toAbsolutePath();
     }
 
+    /** The window title: no versions there (the launcher's is in the update messages, the client's in the
+     *  status line). */
+    static final String TITLE = "Brodgar.io Launcher";
+
+    /** The window icon, in the jar beside the classes: the client's dolmen on a parchment tile (the client's own
+     *  is the blue one), <code>etc/icon.png</code> out of the client's <code>tools/icon.py --style parchment</code>. */
+    static final String ICON = "icon.png";
+
+    /** {@link #ICON} for a Swing window; null if the jar has none. */
+    static java.awt.Image icon() {
+        try(java.io.InputStream icon = Launcher.class.getResourceAsStream(ICON)) {
+            return (icon == null) ? null : javax.imageio.ImageIO.read(icon);
+        } catch(IOException e) {
+            return null;
+        }
+    }
+
     /** The jar this class was loaded from; null from a classes folder. */
     static Path jar() {
         try {
@@ -441,12 +473,6 @@ public final class Launcher {
             return shipped;
         Path own = Paths.get(System.getProperty("java.home"), "bin", "javaw.exe");
         return Files.exists(own) ? own : Paths.get(System.getProperty("java.home"), "bin", "java");
-    }
-
-    /** Window title: launcher version, plus the client version when <code>offered</code> is not null. */
-    private static String title(String offered) {
-        String v = version();
-        return "brodgar.io" + ((v == null) ? "" : " launcher " + (released() ? "v" + v : v)) + ((offered == null) ? "" : " · client " + offered);
     }
 
     private static String tail(Path log, int lines) {

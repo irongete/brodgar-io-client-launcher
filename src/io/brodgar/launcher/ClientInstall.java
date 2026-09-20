@@ -4,18 +4,26 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * <code>client/</code>: the release zip unpacked over it ({@link Unzip}: files in the zip replaced, others kept —
  * <code>savedata/</code>, hand-added addons) and <code>installed-version</code>. The zip includes
  * <code>haven-config.properties</code>; {@link #configure} rewrites the launcher-owned lines of it after each
  * unpack and before each start.
+ *
+ * <p><code>cache/</code>: the zips, one folder per channel holding the newest zip downloaded on it
+ * (<code>cache/release/brodgar.io-client-v6.zip</code>), so that switching channels back installs from the zip
+ * already here instead of downloading it again. {@link #cached} looks in every channel's folder;
+ * {@link #cache} is where a download goes; {@link #prune} drops the channel's older zips after one.
  */
 final class ClientInstall {
     private final Path dir;
+    private final Path cache;
 
-    ClientInstall(Path dir) {
+    ClientInstall(Path dir, Path cache) {
         this.dir = dir;
+        this.cache = cache;
     }
 
     Path dir() {
@@ -26,18 +34,54 @@ final class ClientInstall {
         return Files.exists(dir.resolve("hafen.jar"));
     }
 
-    /** <code>client/download.tmp</code>; in progress as <code>download.tmp.part</code>. */
-    Path download() {
-        return dir.resolve("download.tmp");
+    /** The zip named <code>asset</code> in any channel's cache folder; null if none. */
+    Path cached(String asset) {
+        for(Channel c : Channel.values()) {
+            Path zip = cache.resolve(c.key).resolve(asset);
+            if(Files.isRegularFile(zip))
+                return zip;
+        }
+        return null;
     }
 
-    /** Delete <code>download.tmp</code> and <code>download.tmp.part</code> if present. */
+    /** <code>cache/&lt;channel&gt;/&lt;asset&gt;</code>, its folder made: where the channel's download goes. */
+    Path cache(Channel channel, String asset) throws IOException {
+        Path folder = cache.resolve(channel.key);
+        Files.createDirectories(folder);
+        return folder.resolve(asset);
+    }
+
+    /** Delete everything in <code>zip</code>'s folder but <code>zip</code>: the channel's older zips. */
+    void prune(Path zip) {
+        try(Stream<Path> files = Files.list(zip.getParent())) {
+            files.filter(p -> !p.equals(zip)).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch(IOException e) {
+                    // locked; it goes with a later prune
+                }
+            });
+        } catch(IOException e) {
+            // the folder is unreadable: nothing to prune
+        }
+    }
+
+    /** Delete the <code>.part</code> of a download that did not finish, in every channel's cache folder. */
     void tidy() {
-        for(Path p : new Path[] {download(), dir.resolve(download().getFileName() + ".part")}) {
-            try {
-                Files.deleteIfExists(p);
+        for(Channel c : Channel.values()) {
+            Path folder = cache.resolve(c.key);
+            if(!Files.isDirectory(folder))
+                continue;
+            try(Stream<Path> files = Files.list(folder)) {
+                files.filter(p -> p.getFileName().toString().endsWith(".part")).forEach(p -> {
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch(IOException e) {
+                        // locked or read-only; the next download overwrites it
+                    }
+                });
             } catch(IOException e) {
-                // locked or read-only; the next download overwrites it
+                // unreadable: nothing to tidy
             }
         }
     }
