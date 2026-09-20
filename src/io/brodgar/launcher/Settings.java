@@ -48,7 +48,7 @@ public final class Settings {
         # haven.resurl in client/haven-config.properties := resource.proxy ? resource.proxy.url : resource.url
         resource.proxy=false
         resource.url=https://game.havenandhearth.com/res/
-        resource.proxy.url=http://brodgar.io/res/
+        resource.proxy.url=https://res.brodgar.io/
 
         # true: haven.addondir in client/haven-config.properties := addons.dir; false: line removed (client/addons)
         addons.override=false
@@ -112,7 +112,7 @@ public final class Settings {
     boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
     String resourceUrl()      {return get("resource.url", "https://game.havenandhearth.com/res/");}
-    String resourceProxyUrl() {return get("resource.proxy.url", "http://brodgar.io/res/");}
+    String resourceProxyUrl() {return get("resource.proxy.url", "https://res.brodgar.io/");}
     /** Absent from a file written before the flag existed: on when a folder is set. */
     boolean addonsOverride()  {return "true".equalsIgnoreCase(get("addons.override", addonsDir().isBlank() ? "false" : "true"));}
     String addonsDir()        {return get("addons.dir", "");}
