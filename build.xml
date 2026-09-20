@@ -1,10 +1,9 @@
 <?xml version="1.0" ?>
 
-<!-- The brodgar.io launcher. `ant dist` builds the folder a player unzips and runs, a jpackage app image:
-       build/dist/Brodgar/Brodgar.exe         starts the launcher without a console window
-       build/dist/Brodgar/app/                launcher.jar, the trailer, Brodgar.cfg (which names the runtime)
-       build/dist/Brodgar/runtime-<version>/  a Java runtime cut from the JDK (jlink), which also runs the client
-     plus launcher.jar, run.bat and runtime/ at the root for the updaters of launchers before v7 (Updater.java).
+<!-- The brodgar.io launcher. `ant dist` builds the folder a player unzips and runs:
+       build/dist/Brodgar/run.bat        starts the launcher on the runtime beside it
+       build/dist/Brodgar/launcher.jar
+       build/dist/Brodgar/runtime/       a Java runtime cut from the JDK (jlink), which also runs the client
      `ant release` zips it. Nothing here is fetched from the network and nothing built is committed: the
      runtime is a product of the JDK on the build machine, and the release asset is where it travels.
 
@@ -88,49 +87,19 @@
     </exec>
   </target>
 
-  <!-- The folder handed to a player: jpackage's app image of the jar and the trailer on the runtime, then the
-       runtime renamed after the version and Brodgar.cfg told so (jpackage's launcher reads app.runtime; it
-       writes none, taking runtime/), and the three files the updaters of launchers before v7 want: the jar
-       copied to the root, run.bat (CRLF, as a .bat is read) forwarding to the exe, and a stub runtime/. -->
+  <!-- The folder handed to a player: the jar, the trailer, run.bat (CRLF, as a .bat is read), and the runtime. -->
   <target name="dist" depends="jar, runtime">
     <delete dir="build/dist" />
-    <delete dir="build/app" />
-    <mkdir dir="build/app" />
-    <copy file="build/launcher.jar" todir="build/app" />
-    <copy todir="build/app">
+    <mkdir dir="build/dist/${app.name}" />
+    <copy file="build/launcher.jar" todir="build/dist/${app.name}" />
+    <copy todir="build/dist/${app.name}">
       <fileset dir="etc" includes="trailer.*" />
     </copy>
-    <!-- retried: writing the icon into the exe now and then fails on a lock the antivirus holds for a moment -->
-    <retry retrycount="2" retrydelay="2000">
-      <sequential>
-        <delete dir="build/dist/${app.name}" />
-        <exec executable="${jdk.home}/bin/jpackage" failonerror="true">
-          <arg value="--type" />
-          <arg value="app-image" />
-          <arg value="--name" />
-          <arg value="${app.name}" />
-          <arg value="--dest" />
-          <arg value="build/dist" />
-          <arg value="--input" />
-          <arg value="build/app" />
-          <arg value="--main-jar" />
-          <arg value="launcher.jar" />
-          <arg value="--runtime-image" />
-          <arg value="build/runtime" />
-          <arg value="--icon" />
-          <arg value="etc/icon.ico" />
-          <arg value="--java-options" />
-          <arg value="-Dlauncher.home=$ROOTDIR" />
-        </exec>
-      </sequential>
-    </retry>
-    <move file="build/dist/${app.name}/runtime" tofile="build/dist/${app.name}/runtime-${version}" />
-    <replace file="build/dist/${app.name}/app/${app.name}.cfg" token="[Application]" value="[Application]${line.separator}app.runtime=$ROOTDIR\runtime-${version}" />
-    <copy file="build/launcher.jar" todir="build/dist/${app.name}" />
     <fixcrlf srcdir="etc" includes="run.bat" destdir="build/dist/${app.name}" eol="crlf" />
-    <mkdir dir="build/dist/${app.name}/runtime/bin" />
-    <touch file="build/dist/${app.name}/runtime/bin/javaw.exe" />
-    <echo message="Launcher ready: build/dist/${app.name}/${app.name}.exe" />
+    <copy todir="build/dist/${app.name}/runtime">
+      <fileset dir="build/runtime" />
+    </copy>
+    <echo message="Launcher ready: build/dist/${app.name}/run.bat" />
   </target>
 
   <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), the trailer, and

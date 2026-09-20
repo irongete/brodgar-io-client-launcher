@@ -11,7 +11,7 @@ Windows only; it brings its own Java.
 
 1. **[Download it](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher.zip)**
    and unzip it anywhere: the client and your game data will live in that folder.
-2. Run `Brodgar.exe`. The first start downloads the client.
+2. Run `run.bat`. The first start downloads the client.
 3. Press **Play**. The launcher stays open while the game runs.
 
 On Steam, subscribe to the *Brodgar* item in the Workshop of Haven & Hearth and pick it in the game's

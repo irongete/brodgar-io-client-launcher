@@ -11,8 +11,8 @@
   commit, then confirmed before the build (-Yes skips the question).
 
   Refuses a dirty tree, a branch other than master (-Branch), a version not above GitHub's newest and a tag
-  that exists anywhere. Runs `ant -Dversion=<n> release` -- the jpackage image: Brodgar.exe, app/ and the
-  jlink runtime cut from jdk.home in build.properties, zipped -- tags vN, pushes the tag and then the branch, and creates the
+  that exists anywhere. Runs `ant -Dversion=<n> release` -- launcher.jar, run.bat and the jlink runtime cut
+  from jdk.home in build.properties, zipped -- tags vN, pushes the tag and then the branch, and creates the
   release with the zip. Then `.\publish-steam.ps1` puts the same launcher on the Steam Workshop.
   Needs git, ant and gh (`gh auth login`).
 

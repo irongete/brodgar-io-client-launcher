@@ -21,7 +21,7 @@ import java.util.List;
  * game as running indefinitely.
  *
  * <p>Home is outside the item folder because Steam rewrites that folder on every item update. No
- * <code>Brodgar.exe</code> under home: <code>Launcher.shipped()</code> is false, so no self-update; the item
+ * <code>runtime/</code> under home: <code>Launcher.shipped()</code> is false, so no self-update; the item
  * upload is the update. Arguments are passed through (<code>--check</code> for a manual test).
  */
 public final class Workshop {
@@ -70,7 +70,7 @@ public final class Workshop {
     static Path java(Path home) {
         Path exe = ProcessHandle.current().info().command().map(Paths::get).orElse(null);
         if(exe == null)
-            return Launcher.javaw();
+            return Launcher.javaw(home);
         Path javaw = exe.resolveSibling("javaw.exe");
         return Files.exists(javaw) ? javaw : exe;
     }
