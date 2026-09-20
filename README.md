@@ -5,6 +5,11 @@ Windows only; it brings its own Java.
 
 - **Installs the client** and keeps it at the newest release, on the **Release** or the **Beta** channel.
 - **Updates itself** the same way.
+- **Fetches the game's resources from brodgar.io** (the checkbox): its resource cache answers in a
+  fraction of the official server's time, and the **resource pack**, `client/brodgar-res.jar`, holds
+  every resource from the first start (one download of about 250 MB; renewed at most monthly, and
+  only when there is something new). What the pack has not got, the client fetches as it goes.
+  `launcher.properties`: `resource.pack`, `resource.pack.url`, `resource.pack.renew.days`.
 - **Starts the game** with the memory and Java options you set in **Options...**.
 
 ## How to use
@@ -12,7 +17,7 @@ Windows only; it brings its own Java.
 1. **[Download it](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher.zip)**
    and unzip it anywhere: the client and your game data will live in that folder.
 2. Run `run.bat`. The first start downloads the client.
-3. Press **Play**. The launcher stays open while the game runs.
+3. Press **Play**. The launcher stays open; press it again for another client.
 
 On Steam, subscribe to the *Brodgar* item in the Workshop of Haven & Hearth and pick it in the game's
 launcher; the files then live in `%LOCALAPPDATA%\Brodgar.io`.

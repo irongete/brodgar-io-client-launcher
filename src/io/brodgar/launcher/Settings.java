@@ -50,6 +50,13 @@ public final class Settings {
         resource.url=https://game.havenandhearth.com/res/
         resource.proxy.url=https://res.brodgar.io/
 
+        # the brodgar.io resource pack, client/brodgar-res.jar: every resource from the first start. With
+        # resource.proxy on: downloaded when missing, renewed when the server's is newer and the installed one is
+        # older than resource.pack.renew.days (0: whenever the server's is newer)
+        resource.pack=true
+        resource.pack.url=https://brodgar.io/res/?jar
+        resource.pack.renew.days=30
+
         # true: haven.addondir in client/haven-config.properties := addons.dir; false: line removed (client/addons)
         addons.override=false
         addons.dir=
@@ -113,6 +120,9 @@ public final class Settings {
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
     String resourceUrl()      {return get("resource.url", "https://game.havenandhearth.com/res/");}
     String resourceProxyUrl() {return get("resource.proxy.url", "https://res.brodgar.io/");}
+    boolean resourcePack()    {return !"false".equalsIgnoreCase(get("resource.pack", "true"));}
+    String resourcePackUrl()  {return get("resource.pack.url", "https://brodgar.io/res/?jar");}
+    int resourcePackRenewDays() {try {return Math.max(0, Integer.parseInt(get("resource.pack.renew.days", "30")));} catch(NumberFormatException e) {return 30;}}
     /** Absent from a file written before the flag existed: on when a folder is set. */
     boolean addonsOverride()  {return "true".equalsIgnoreCase(get("addons.override", addonsDir().isBlank() ? "false" : "true"));}
     String addonsDir()        {return get("addons.dir", "");}

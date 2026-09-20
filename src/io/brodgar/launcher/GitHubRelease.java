@@ -35,7 +35,7 @@ final class GitHubRelease {
 
     private static final Duration CONNECT = Duration.ofSeconds(10);
     /** Body read watchdog: no byte for this long fails the download (the request timeout covers headers only). */
-    private static final Duration STALL = Duration.ofSeconds(60);
+    static final Duration STALL = Duration.ofSeconds(60);
     private static final Pattern TAG = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]*)\"");
     private static final Pattern PRERELEASE = Pattern.compile("\"prerelease\"\\s*:\\s*(true|false)");
     private static final Pattern DRAFT = Pattern.compile("\"draft\"\\s*:\\s*(true|false)");
@@ -196,14 +196,24 @@ final class GitHubRelease {
 
     /** Download <code>url</code> to <code>to</code>; <code>progress</code> gets the fraction done, -1 without
      *  <code>content-length</code>. Fails with <code>IOException</code> after {@link #STALL} without a byte. */
-    @SuppressWarnings("try")   // the watchdog thread closes the stream
     static void download(String url, Path to, DoubleConsumer progress) throws IOException, InterruptedException {
+        download(HttpRequest.newBuilder(URI.create(url)).timeout(STALL).GET().build(), to, progress);
+    }
+
+    /** The request's body to <code>to</code>, as {@link #download(String, Path, DoubleConsumer)}: the response
+     *  headers, or <code>null</code> for a <code>304</code> (a conditional request: nothing is written). A body
+     *  shorter than its <code>content-length</code> is a failure, not a file. */
+    @SuppressWarnings("try")   // the watchdog thread closes the stream
+    static java.net.http.HttpHeaders download(HttpRequest req, Path to, DoubleConsumer progress) throws IOException, InterruptedException {
         HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT).build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(STALL).GET().build();
         HttpResponse<InputStream> res = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        if(res.statusCode() == 304) {
+            res.body().close();
+            return null;
+        }
         if(res.statusCode() != 200) {
             res.body().close();
-            throw new IOException("HTTP " + res.statusCode() + " for " + url);
+            throw new IOException("HTTP " + res.statusCode() + " for " + req.uri());
         }
         long total = res.headers().firstValueAsLong("content-length").orElse(-1);
         Path part = to.resolveSibling(to.getFileName() + ".part");
@@ -246,7 +256,16 @@ final class GitHubRelease {
             }
             throw stalled.get() ? new IOException("no data for " + STALL.toSeconds() + " seconds", e) : e;
         }
+        if(total > 0 && done.get() != total) {
+            try {
+                Files.deleteIfExists(part);
+            } catch(IOException held) {
+                // overwritten by the next download
+            }
+            throw new IOException("the download ended at " + done.get() + " of " + total + " bytes");
+        }
         Files.move(part, to, StandardCopyOption.REPLACE_EXISTING);
         progress.accept(1);
+        return res.headers();
     }
 }

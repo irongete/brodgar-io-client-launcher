@@ -33,8 +33,8 @@ import java.util.concurrent.TimeUnit;
  * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
  * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written on the proxy checkbox and when Options
  * closes — an unpacked release restores the zip's copy), then {@link #command} runs with cwd <code>client/</code>
- * and the launcher stays, Play disabled until the client exits. <code>--check</code>: resolve and print, no
- * window, no writes.
+ * and the launcher stays, Play offered again 3 s later: as many clients as wanted. <code>--check</code>:
+ * resolve and print, no window, no writes.
  * <code>--no-launcher-update</code>: skip {@link #updateSelf}.
  */
 public final class Launcher {
@@ -138,10 +138,33 @@ public final class Launcher {
             ui.status("Unexpected: " + e);
             o = client.isInstalled() ? Outcome.INSTALLED_ANYWAY : Outcome.NOTHING;
         }
+        if((o == Outcome.READY) || (o == Outcome.INSTALLED_ANYWAY))
+            pack();
         switch(o) {
             case READY, INSTALLED_ANYWAY -> ui.ready("Play", this::play);
             case NO_RELEASE -> ui.idle();
             case NOTHING -> ui.ready("Retry", this::prepare);
+        }
+    }
+
+    /** The resource pack ({@link ResourcePack}), when <code>resource.pack</code> and the proxy are on: a
+     *  download the first time (~250 MB, the status line says so), a conditional check after the renewal
+     *  period, nothing in between. Never in the way of Play: the client runs without it, and a failed
+     *  download leaves the installed one. */
+    private void pack() {
+        if(!settings.resourcePack() || !settings.resourceProxy())
+            return;
+        boolean first = !Files.exists(client.dir().resolve(ResourcePack.JAR));
+        try {
+            Runnable asking = () -> ui.status(first ? "Downloading the resource pack (once, about 250 MB)..." : "Checking the resource pack...");
+            switch(ResourcePack.sync(settings.resourcePackUrl(), client.dir(), settings.resourcePackRenewDays(), asking, ui::progress)) {
+                case DOWNLOADED -> ui.status("The resource pack is ready.");
+                case UNCHANGED -> ui.status("The resource pack is up to date.");
+                case YOUNG -> {}   // younger than the renewal period: not even asked about; the status line stays
+            }
+        } catch(Exception e) {
+            ui.status(first ? "The resource pack could not be downloaded (" + e.getMessage() + "): the client fetches resources as it goes."
+                            : "The resource pack could not be renewed (" + e.getMessage() + "): the installed one stays.");
         }
     }
 
@@ -245,33 +268,27 @@ public final class Launcher {
         }
     }
 
-    /** Play: configure the client's file, pause the trailer, {@link #start}, and stay: the button and the
-     *  dropdown disabled while the client runs (its files are in use), offered again when it exits — unless the
-     *  process ends within 3 s: error dialog with the exit code and the log tail. With the console on, the
-     *  <code>pause</code> keeps the process alive, so the error is shown there instead. */
+    /** Play: configure the client's file, pause the trailer, {@link #start}, and offer Play again 3 s later:
+     *  another client can be opened, as many as wanted. If the process ends within those 3 s: error dialog with
+     *  the exit code and the log tail. With the console on, the <code>pause</code> keeps the process alive, so
+     *  the error is shown there instead. */
     private void play() {
         ui.busy();
         ui.status("Starting the client...");
-        Process p;
         try {
             client.configure(settings.clientConfig());
             ui.pauseTrailer();
-            p = start();
+            Process p = start();
             if(p.waitFor(3, TimeUnit.SECONDS)) {
                 ui.error("The client exited at once (code " + p.exitValue() + ").\n\n" + tail(home.resolve("client.log"), 12));
                 ui.status("The client did not start.");
-                ui.ready("Play", this::play);
-                return;
+            } else {
+                ui.status("The client has started.");
             }
-            ui.status("The client is running.");
-            p.waitFor();
         } catch(Exception e) {
             ui.error(e.toString());
             ui.status("The client did not start.");
-            ui.ready("Play", this::play);
-            return;
         }
-        ui.status((p.exitValue() == 0) ? "The client has exited." : "The client exited with code " + p.exitValue() + ".");
         ui.ready("Play", this::play);
     }
 
@@ -390,6 +407,7 @@ public final class Launcher {
             System.out.println("newest:    unreachable: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
+        System.out.println("pack:      " + (!settings.resourcePack() ? "off" : !settings.resourceProxy() ? "on, but the proxy is off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
         System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
         System.out.println("command:   " + String.join(" ", command(javaw, settings)));
