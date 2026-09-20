@@ -1,190 +1,95 @@
-# brodgar.io launcher
+# Brodgar.io Launcher
 
-Installs and updates the [brodgar.io client](https://github.com/irongete/brodgar-io-client) from GitHub
-releases, updates itself the same way, and starts the client on the bundled Java runtime.
+The launcher for the [brodgar.io client](https://github.com/irongete/brodgar-io-client) of Haven & Hearth:
+it downloads the client, keeps it and itself up to date, and starts the game. Windows only. It brings its own
+Java, so there is nothing to install.
+
+## Getting it
+
+1. Download `brodgar.io-launcher.zip` from the
+   [latest release](https://github.com/irongete/brodgar-io-client-launcher/releases/latest).
+2. Unzip it anywhere — a folder of its own, since the client and your game data will live in it.
+3. Run `run.bat`.
+
+The first start downloads the client (about 85 MB); from then on the launcher only downloads what is new.
+Move the folder and everything moves with it.
+
+On Steam, subscribe to the *Brodgar* item in the Workshop of Haven & Hearth and pick it in the game's own
+launcher: it starts this one, on Steam's Java, with your Steam login available in the client. The files
+then live in `%LOCALAPPDATA%\Brodgar.io`.
+
+## The window
+
+At the top, the game's trailer: click to play or pause, double-click for full screen (Esc or another
+double-click comes back), and a bar over its bottom edge, while the mouse is on it, to seek. Under it, a link
+to the trailer on YouTube.
+
+Then the status line, which says what the launcher is doing — looking for the newest client, downloading it,
+ready — and a progress bar for the download. Beside them, **Play**.
+
+- **Play** starts the game. The launcher stays open while it runs, with Play disabled, and offers it again
+  when the game exits. If the client dies at once, a dialog shows its exit code and the last lines of
+  `client.log`.
+- **Start the client with a console window**: the game runs in a command window that shows what it prints
+  and stays open if it ends in an error. For finding out why it will not start.
+- **Use brodgar.io resource cache proxy**: the game fetches its resources through brodgar.io's cache instead
+  of the game server. Faster loading, less load on the server.
+- **Options...**: how the game is started — see below.
+- **Open client folder**: the client's folder in Explorer: `hafen.jar`, `savedata`, `addons`.
+- **Channel**: *Release* installs the newest release of the client; *Beta* the newest of everything, betas
+  included. Changing it installs that channel's newest right away. A channel with nothing published yet keeps
+  Play disabled until you pick the other.
+
+## Updates
+
+Every start looks for the newest client on the channel and installs it if it is newer than the installed
+one. Your game data (`savedata`, addons you added yourself) is kept. The newest download of each channel is
+kept too, so switching between Release and Beta and back does not download the same client twice.
+
+The launcher also updates itself: when a newer launcher is published, it installs it and restarts before
+going on. On Steam the Workshop item is the update, as with any Workshop item.
+
+## Options
+
+- **Memory**: how much the game gets, reserved when it starts. The slider goes up to half your machine's
+  memory, 16 GB at most.
+- **Reserve it all at start**: the memory is claimed at once rather than page by page as the game first uses
+  it. A slower start, smoother afterwards.
+- **Garbage collector**: how the game frees memory it no longer uses. *Concurrent (ZGC)* does it while the
+  game keeps running; *Standard (G1)* is Java's default, in short stops.
+- **Let Windows scale the game window**: on, Windows scales the window on a high-DPI screen; off, the game
+  draws at 1:1 and scales its interface itself.
+- **IPv6**: which address to try first when a server has both kinds.
+- **Extra Java options**: anything else for the Java that runs the game, space-separated.
+- **Override addons folder** / **Override savedata folder**: a folder of your choice instead of the client's
+  own `addons` and `savedata`.
+- **Look for a newer launcher and game when the launcher opens**: off, the launcher offers whatever client is
+  installed and asks GitHub for nothing.
+
+The dialog previews the command the game will be started with. OK writes the settings to
+`launcher.properties`, beside the launcher; Cancel keeps the old ones.
+
+## Files
 
 ```text
-brodgar.io-launcher/     the zip's contents, at its root (the zip carries no version: this folder outlives many)
-  run.bat                starts launcher.jar on runtime/
-  launcher.jar
-  runtime/               jlink runtime; runs the launcher and the client
-  client/                the client release: hafen.jar, lib/, resource jars, addons/, haven-config.properties
-  client/savedata/       client data; never written by the launcher
-  client/installed-version
-  launcher.properties    settings; created with defaults on first run
-  client.log             stdout/stderr of the last client run
+run.bat                starts the launcher
+launcher.jar           the launcher
+runtime/               its Java, which also runs the game
+client/                the game client
+client/savedata/       your game data: settings, maps, everything the client saves
+client/addons/         addons
+cache/                 the newest client download of each channel
+launcher.properties    the settings, as Options writes them
+client.log             what the game printed the last time it ran
 ```
 
-Started from Steam, the folder is `%LOCALAPPDATA%\Brodgar.io` and the runtime is Steam's — see
-[Steam Workshop](#steam-workshop).
+## If something goes wrong
 
-## Behaviour
-
-Window: status line, progress bar, main button; console checkbox; proxy checkbox, channel dropdown,
-**Options...**; **Open client folder**. On start:
-
-0. GET the launcher's own releases (`launcher.repo`): one line, `v1`, `v2`, …, no channel. A tag newer than
-   the jar manifest's version starts the updater and exits — see [Self-update](#self-update). A `dev` launcher (any build without `-Dversion=`)
-   skips this step.
-1. Read `client/installed-version`. GET `https://api.github.com/repos/<repo>/releases` (one call, no token);
-   pick the highest version tag on the channel (`v6` > `v5.3-beta` > `v5`, independent of API order). If the
-   API fails, follow the redirect of `github.com/<repo>/releases/latest` (latest non-prerelease). No result:
-   Release channel reports "nothing published"; Beta channel reports "unreachable" (a beta cannot be
-   detected via the redirect).
-2. If the tag differs from the installed one: download `releases/download/<tag>/<asset.prefix><tag>.zip`
-   (`brodgar.io-client-v5.1-beta.zip`) to `client/download.tmp`, unpack over `client/` (`REPLACE_EXISTING`; files
-   not in the zip are kept — `savedata/`, addons added by hand), write `installed-version`. A download with
-   no bytes for 60 s fails. `download.tmp`/`download.tmp.part` left by a failed run are deleted on the next
-   start.
-3. Main button = **Play**: writes `client/haven-config.properties` (see below), runs the command from
-   Options with cwd `client/`, exits. If the process ends within 3 s, an error dialog shows the exit code and
-   the tail of `client.log`. Nothing published and nothing installed: button disabled. Nothing published, or
-   GitHub unreachable, with a client installed: Play. Nothing installed and download failed: **Retry**.
-
-**Start the client with a console window** (`console`): on, `runtime/bin/java.exe` via
-`cmd /c start /wait ... || pause`, output on the console; off, `runtime/bin/javaw.exe`, output redirected to
-`client.log`.
-
-**Channel** (`channel`): `release` = highest non-prerelease tag; `beta` = highest tag of all. The client's
-`publish.ps1` publishes `vN.X-beta` as prerelease, `vN` as release. Changing the channel re-runs step 1
-at once. Default `beta`.
-
-**Use brodgar.io resource cache proxy** (`resource.proxy`): selects `haven.resurl` in
-`client/haven-config.properties` — on: `resource.proxy.url`; off: `resource.url`. Written on toggle, on
-Options close, and before every Play (an unpacked release restores the zip's copy of the file). Only that
-line is rewritten; the rest of the file is kept. Not passed on the command line.
-
-**Open client folder**: opens `client/` in Explorer.
-
-**Options...**: `heap`, `heap.pretouch`, `gc`, `ui.scale`, `ipv6`, `java.opts`, `resource.proxy.url`, the
-two folder overrides, `check.updates` — see [Settings](#settings) — with a live preview of the resulting
-command.
-Not configurable: `--add-exports`/`--enable-native-access`/`--sun-misc-unsafe-memory-access=allow`.
-
-Locale: English only; the runtime carries no other locale data.
-
-## Self-update
-
-If step 0 finds a newer tag, the launcher copies `launcher.jar` to `update/` (the running jar is locked),
-starts `io.brodgar.launcher.Updater` from that copy and exits. The updater waits for the launcher process
-to end, downloads `brodgar.io-launcher.zip` of that release into `update/`, unpacks it, moves
-`launcher.jar` and `run.bat` into place (atomic move each), restarts the launcher, which deletes `update/`.
-`client/` is not touched.
-
-`runtime/` cannot be replaced while in use: the new one is left as `runtime.new/` and `run.bat` swaps it in
-(two renames) on a later start when nothing runs on `runtime/`. On failure the updater shows the error and
-starts the current launcher with `--no-launcher-update`; the next start retries. Development runs (`ant run`,
-`ant check`) and `dev` builds (`ant dist` without `-Dversion=`) never self-update.
-
-## Settings
-
-`launcher.properties`, UTF-8, beside `launcher.jar`. A missing key takes its default. Values are written
-`Properties`-escaped (backslashes doubled).
-
-| Key | Default | Effect |
-|---|---|---|
-| `heap` | `2g` | `-Xms<heap> -Xmx<heap>` |
-| `heap.pretouch` | `true` | `-XX:+AlwaysPreTouch` |
-| `gc` | `zgc` | `zgc`: `-XX:+UseZGC` (`-XX:+ZGenerational` on JDK < 24); `g1`: nothing (JVM default) |
-| `ui.scale` | `false` | `false`: `-Dsun.java2d.uiScale.enabled=false`; `true`: nothing |
-| `ipv6` | `system` | `-Djava.net.preferIPv6Addresses=<system\|true\|false>` |
-| `java.opts` | *(empty)* | appended to the JVM arguments, space-separated |
-| `channel` | `beta` | `release` \| `beta` |
-| `console` | `false` | `true`: `java.exe` in a `cmd` window; `false`: `javaw.exe`, output to `client.log` |
-| `resource.proxy` | `false` | `haven.resurl` in `client/haven-config.properties` := `true` ? `resource.proxy.url` : `resource.url` |
-| `resource.url` | `https://game.havenandhearth.com/res/` | |
-| `resource.proxy.url` | `http://brodgar.io/res/` | |
-| `addons.override` | `false` | *Override addons folder*: `true` writes `haven.addondir` = `addons.dir` into `client/haven-config.properties`; `false` removes the line (client default `client/addons`). Absent, it is `true` when `addons.dir` is set |
-| `addons.dir` | *(empty)* | the folder |
-| `savedata.override` | `false` | *Override savedata folder*: `true` writes `haven.savedatadir` = `savedata.dir`; `false` removes the line (client default `client/savedata`) |
-| `savedata.dir` | *(empty)* | the folder |
-| `check.updates` | `true` | `false`: skip steps 0 and 1, offer the installed client |
-| `repo` | `irongete/brodgar-io-client` | GitHub `owner/repo` of the client releases |
-| `asset.prefix` | `brodgar.io-client-` | asset name = `<asset.prefix><tag>.zip` |
-| `launcher.repo` | `irongete/brodgar-io-client-launcher` | GitHub `owner/repo` of the launcher releases |
-
-Command line: `--check` resolves both newest releases and prints home, runtime, versions, asset URL, the
-`haven-config.properties` lines, the client command and cwd, then exits (no window, no writes).
-`--no-launcher-update` skips step 0 for that run.
-
-## Build
-
-Requires a JDK with `jlink`, named in `build.properties`; the client is verified on **Eclipse Temurin 25**,
-unpacked in this folder as `jdk-25.x/` (gitignored):
-
-```properties
-jdk.home=C:/path/to/brodgar-io-client-launcher/jdk-25.0.4.1+1
-```
-
-Without it, the JDK running `ant` is used (21+ with `jlink`).
-
-| Target | Output |
-|---|---|
-| `ant jar` | `build/launcher.jar` (version in the manifest) |
-| `ant runtime` | `build/runtime/`: `jlink` of the modules `jdeps` reports for `hafen.jar` and its libraries |
-| `ant dist` | `build/dist/Brodgar/`: `launcher.jar`, `run.bat`, `runtime/` |
-| `ant release` | `build/brodgar.io-launcher.zip`: the `dist` folder's contents at the zip root |
-| `ant check` | `--check` with `launcher.home` = this folder |
-| `ant run` | the launcher with `launcher.home` = this folder (`client/`, `launcher.properties` gitignored) |
-| `ant workshop` | `build/workshop/`: `launcher.jar` + `workshop/` |
-
-`-Dversion=1.0.1` sets the version; without it every build is `dev`, which never updates itself. Build
-output is not committed.
-
-### Testing locally
-
-| To see | Run |
-|---|---|
-| the launcher as a player has it: `run.bat`, `runtime/`, the client installed from GitHub into `client/` | `ant dist`, then `build\dist\Brodgar\run.bat` — version `dev`, so it never replaces itself with the published launcher |
-| the same, without the shipped layout | `ant run` — home is this folder; `client/` and `launcher.properties` appear here, ignored by git |
-| what it would do, without a window | `ant check` |
-| the self-update itself | `ant -Dversion=0.0.1 dist`, then `build\dist\Brodgar\run.bat`: an older number, so it updates to the published launcher |
-| the launcher over a client you built yourself | `check.updates=false` in `launcher.properties` (Options), and the client's `dist/` copied into `client/` |
-| an addon as you edit it | *Override addons folder* (Options) pointing at the addons checkout: the client loads it from there, and `:reload` in-game reloads it |
-
-## Publish
-
-The launcher has one line of releases, `v1`, `v2`, `v3`, … — no betas: every launcher updates itself to
-the newest. From a clean `master`, with `git`, `ant` and `gh` (`gh auth login`) on the PATH:
-
-```powershell
-.\publish.ps1               # the next number: v1 -> v2
-.\publish.ps1 -Version 5    # that number
-```
-
-[`publish.ps1`](publish.ps1) prints the newest version on GitHub and the one it is about to publish and asks
-(`-Yes` skips the question); then it runs `ant -Dversion=<n> release`, tags HEAD `vN`, pushes tag and branch,
-creates the GitHub release with the zip as asset. Notes: `-Notes <file>`, `-Message "..."`, or the commit
-subjects since the previous version. `-NoPublish` stops after the tag; `-Draft` is passed to GitHub. Then
-`.\publish-steam.ps1` puts the same launcher on the Workshop — see below.
-
-## Steam Workshop
-
-Haven & Hearth's Steam launcher lists subscribed Workshop clients; each item's `workshop-client.properties`
-names its entry point. Ours is [`workshop/`](workshop/): `launcher.jar` plus those files. Steam's launcher
-loads the jar into its JVM and calls `io.brodgar.launcher.Workshop.main`, which starts this launcher as a
-child process on the same Java (Steam's runtime, which then also runs the client) with the same environment
-(`SteamAppId` included — required by the client's *Log in with Steam*). `launcher.home` =
-`%LOCALAPPDATA%\Brodgar.io`: `client/`, `launcher.properties`, `client.log`, `launcher.log` (launcher
-stdout/stderr). Nothing is written to the item folder, which Steam rewrites on update. No `runtime/` there,
-so no self-update: a new item upload is the update. The client is still installed from GitHub.
-
-[`publish-steam.ps1`](publish-steam.ps1) uploads the item. Requires: Steam client running and logged in,
-`java` and `ant` on PATH, the client checkout built (`ant bin`: the upload tool `haven.SteamWorkshop` is in
-its `bin\hafen.jar`).
-
-```powershell
-.\publish-steam.ps1                                # upload; visibility as workshop-client.properties says
-.\publish-steam.ps1 -Version 1.0.1 -Message "..."  # manifest version, change note
-.\publish-steam.ps1 -Visibility public             # public | private | friends
-.\publish-steam.ps1 -NoUpload                      # ant workshop only
-```
-
-Runs `ant workshop`, uploads `build\workshop\`. `workshop-id` in
-[`workshop/workshop-client.properties`](workshop/workshop-client.properties) was set by the first upload;
-later uploads update that item (Steam's launcher re-downloads it on its next start). `-Visibility` is written
-to the file before the build; every upload applies the file's visibility, title, description and preview
-image, overwriting edits made on the item's web page. `-Version` sets the manifest version (like
-`-Dversion=`); without it, the version is the `v*` tag HEAD carries when the tree is clean — what
-`publish.ps1` just made — and `dev` otherwise. A public item needs the Workshop Legal Agreement accepted once
-on the item's web page; the tool reports when that applies.
+- **The game does not start**: turn on *Start the client with a console window* and press Play; the console
+  shows what the client printed and stays open. `client.log` has the same for the last run without the
+  console.
+- **"GitHub is unreachable"**: the launcher could not ask GitHub for the newest client. If one is installed,
+  Play still works with it.
+- **A download failed**: **Retry** tries again; a download is dropped when nothing arrives for a minute.
+- **The launcher will not update itself**: a new launcher needs to replace `runtime/`, which it cannot do
+  while the game runs on it; it finishes on a later start, when nothing does.
