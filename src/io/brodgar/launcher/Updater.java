@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -30,9 +29,10 @@ import javax.swing.WindowConstants;
  * <code>update/updater.jar</code> (the running jar is locked) and starts this class from it; the launcher then
  * exits. {@link #main}: wait for the launcher pid, download the release zip into <code>update/</code>, unpack,
  * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code>,
- * <code>launcher.jar</code> and the trailer's files into <code>home</code>, start the launcher, exit. <code>run.bat</code> swaps
- * <code>runtime.new/</code> in on a later start (the runtime cannot be replaced while this process and the game
- * run on it). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
+ * <code>launcher.jar</code> and the trailer's files into <code>home</code>, start <code>run.bat</code>, exit.
+ * <code>run.bat</code> swaps <code>runtime.new/</code> in and starts the new launcher on it: it runs two
+ * seconds after this process is gone, since the runtime cannot be replaced while a process runs on it
+ * ({@link #start}). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
  *
  * <p>On failure: error dialog, then the current launcher is started with <code>--no-launcher-update</code>.
  * <code>client/</code> is never touched.
@@ -133,12 +133,13 @@ public final class Updater {
         }
     }
 
-    /** <code>runtime/bin/javaw.exe -jar launcher.jar [--no-launcher-update]</code> in <code>home</code>; an
+    /** <code>run.bat [--no-launcher-update]</code> in <code>home</code>, two seconds from now, in a minimised
+     *  console of its own: by then this process, which runs on <code>runtime/</code>, has exited, and the bat
+     *  can swap <code>runtime.new/</code> in before it starts the launcher. The caller exits at once. An
      *  <code>IOException</code> is shown in a dialog. */
     private void start(boolean asIs) {
-        List<String> cmd = new ArrayList<>(List.of(home.resolve(RUNTIME).resolve("bin").resolve("javaw.exe").toString(), "-jar", home.resolve(JAR).toString()));
-        if(asIs)
-            cmd.add("--no-launcher-update");
+        String bat = "timeout /t 2 /nobreak >nul & call " + BAT + (asIs ? " --no-launcher-update" : "");
+        List<String> cmd = List.of("cmd", "/c", "start", "\"\"", "/min", "cmd", "/c", bat);
         try {
             new ProcessBuilder(cmd).directory(home.toFile()).inheritIO().start();
         } catch(IOException e) {
