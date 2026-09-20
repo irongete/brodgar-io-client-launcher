@@ -1,0 +1,78 @@
+# A push to master publishes the next version, v1 -> v2, the way it is done by hand: publish.ps1, which counts
+# the number from GitHub, builds, tags, pushes the tag and creates the release with the zip. The Run workflow
+# button takes a number instead. A Windows runner: the zip carries a runtime jlinked from the JDK the build
+# runs on, and the player's machine is Windows. The Steam Workshop is not here: publish-steam.ps1 needs the
+# Steam client, logged in.
+name: Publish
+run-name: brodgar-io-launcher-${{ inputs.version && format('v{0}', inputs.version) || 'next' }}
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "That number instead of the counted one"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+# what build.properties names on a development machine, fetched here: the JDK is the one ant runs on (Temurin,
+# with jlink), the OpenJFX jmods are the runtime's JavaFX; and ant itself, which the runner image lacks
+env:
+  JDK: '25'
+  JAVAFX: '25.0.3'
+  ANT: '1.10.15'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # a commit that carries a tag was published by hand
+      - name: Skip a commit published by hand
+        id: tagged
+        run: |
+          $tags = git tag --points-at HEAD 'v*'
+          if ($tags) {
+            "skip=true" >> $env:GITHUB_OUTPUT
+            "HEAD is already $tags`: published by hand, nothing to do." | Tee-Object -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          }
+
+      - uses: actions/setup-java@v4
+        if: steps.tagged.outputs.skip != 'true'
+        with:
+          distribution: temurin
+          java-version: ${{ env.JDK }}
+
+      - name: Ant and OpenJFX
+        if: steps.tagged.outputs.skip != 'true'
+        run: |
+          Invoke-WebRequest "https://archive.apache.org/dist/ant/binaries/apache-ant-$env:ANT-bin.zip" -OutFile "$env:RUNNER_TEMP\ant.zip"
+          Expand-Archive "$env:RUNNER_TEMP\ant.zip" -DestinationPath $env:RUNNER_TEMP
+          "$env:RUNNER_TEMP\apache-ant-$env:ANT\bin" >> $env:GITHUB_PATH
+          Invoke-WebRequest "https://download2.gluonhq.com/openjfx/$env:JAVAFX/openjfx-${env:JAVAFX}_windows-x64_bin-jmods.zip" -OutFile "$env:RUNNER_TEMP\jmods.zip"
+          Expand-Archive "$env:RUNNER_TEMP\jmods.zip" -DestinationPath $env:RUNNER_TEMP
+          "javafx.home=$($env:RUNNER_TEMP -replace '\\', '/')/javafx-jmods-$env:JAVAFX" | Set-Content build.properties -Encoding ascii
+
+      - name: Publish
+        if: steps.tagged.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          $arguments = @{ Yes = $true }
+          if ($env:VERSION) { $arguments.Version = $env:VERSION }
+          ./publish.ps1 @arguments
+          "Published $(git tag --points-at HEAD 'v*') from $(git rev-parse --short HEAD)." | Tee-Object -Append -FilePath $env:GITHUB_STEP_SUMMARY
