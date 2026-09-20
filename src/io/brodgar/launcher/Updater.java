@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -26,21 +27,36 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * Launcher self-update, a separate process. {@link #launch} copies <code>launcher.jar</code> to
- * <code>update/updater.jar</code> (the running jar is locked) and starts this class from it; the launcher then
- * exits. {@link #main}: wait for the launcher pid, download the release zip into <code>update/</code>, unpack,
- * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code>,
- * <code>launcher.jar</code> and the trailer's files into <code>home</code>, start the launcher, exit. <code>run.bat</code> swaps
- * <code>runtime.new/</code> in on a later start (the runtime cannot be replaced while this process and the game
- * run on it). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
+ * Launcher self-update, a separate process. The shipped layout is jpackage's, with the runtime named after the
+ * version it came with:
+ * <pre>
+ *   Brodgar.exe            starts the launcher, no console: the JVM of the runtime app/Brodgar.cfg names, in-process
+ *   app/launcher.jar       the launcher; the trailer's files and Brodgar.cfg beside it
+ *   runtime-&lt;version&gt;/     that launcher's runtime, which also runs the client
+ *   update/                this update's staging folder; the launcher it installs deletes it
+ * </pre>
+ * So an update never replaces a folder a process runs on. {@link #launch} copies <code>app/launcher.jar</code>
+ * to <code>update/updater.jar</code> (the jar in use is locked) and starts this class from it, on the current
+ * runtime; the launcher exits. {@link #main}: wait for the launcher's pid, download the release zip into
+ * <code>update/</code>, unpack, {@link #place} the launcher (its runtime folder, <code>app/</code> in the old
+ * one's stead, <code>Brodgar.exe</code>, <code>run.bat</code>), start <code>Brodgar.exe</code>, exit. The
+ * launcher then deletes <code>update/</code> and the runtimes of other versions ({@link #tidy}).
  *
  * <p>On failure: error dialog, then the current launcher is started with <code>--no-launcher-update</code>.
  * <code>client/</code> is never touched.
+ *
+ * <p>Launchers before v7 (<code>run.bat</code>, <code>launcher.jar</code> and <code>runtime/</code> at the root)
+ * update through their own updater, which takes those three from the zip and starts the jar on the old
+ * runtime. The zip still carries them — the jar a copy of <code>app/launcher.jar</code>, <code>run.bat</code>
+ * forwarding to <code>Brodgar.exe</code>, <code>runtime/</code> a stub — and that jar, so started, finishes
+ * the update itself: {@link #migrate} places what that updater left in <code>update/</code> and starts
+ * <code>Brodgar.exe</code>, touching no JavaFX, which the old runtime may lack.
  */
 public final class Updater {
-    private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** What moves into <code>home</code> besides the runtime: the trailer's files when the zip has them. */
-    private static final List<String> FILES = List.of(BAT, JAR, Trailer.VIDEO, Trailer.POSTER);
+    private static final String EXE = "Brodgar.exe", APP = "app", JAR = "launcher.jar", BAT = "run.bat", STAGING = "update";
+    /** The runtime folders: this prefix, the version. Also what launchers before v7 named theirs (with
+     *  <code>.new</code> and <code>.old</code>). */
+    static final String RUNTIME = "runtime";
     /** The release asset, as build.xml names it: the same for every release, since the folder a player unzips
      *  keeps its name while the launcher inside updates itself. */
     static final String ASSET = "brodgar.io-launcher.zip";
@@ -57,7 +73,7 @@ public final class Updater {
         } catch(Exception e) {
             // cross-platform look and feel then
         }
-        frame = new JFrame("brodgar.io launcher v" + version);
+        frame = new JFrame(Launcher.TITLE + " v" + version);
         frame.setIconImage(Launcher.icon());
         status = new JLabel("Waiting for the launcher to close...");
         bar = new JProgressBar(0, 1000);
@@ -103,8 +119,7 @@ public final class Updater {
         System.exit(0);
     }
 
-    /** Wait for <code>pid</code>; download and unpack into <code>update/</code>; verify <code>launcher.jar</code>
-     *  and <code>runtime/bin/javaw.exe</code> are there; move runtime and {@link #FILES} into place. */
+    /** Wait for <code>pid</code>; download and unpack into <code>update/</code>; {@link #place}. */
     private void install(long pid, String version, String url) throws IOException, InterruptedException {
         waitFor(pid);
         Path dir = home.resolve(STAGING);
@@ -114,14 +129,33 @@ public final class Updater {
         status("Installing launcher " + version + "...");
         Unzip.unpack(zip, dir);
         Files.delete(zip);
-        if(!Files.isRegularFile(dir.resolve(JAR)) || !Files.isRegularFile(dir.resolve(RUNTIME).resolve("bin").resolve("javaw.exe")))
+        place(home, dir);
+    }
+
+    /** Move the launcher unpacked in <code>dir</code> into <code>home</code>: its runtime folder (a leftover of the
+     *  same name deleted first), <code>app/</code> (the old one deleted first), <code>Brodgar.exe</code> and
+     *  <code>run.bat</code>. <code>IOException</code> if <code>dir</code> holds no launcher. */
+    static void place(Path home, Path dir) throws IOException {
+        Path runtime = runtimeIn(dir);
+        if((runtime == null) || !Files.isRegularFile(dir.resolve(APP).resolve(JAR)) || !Files.isRegularFile(dir.resolve(EXE)))
             throw new IOException("the release zip does not hold a launcher");
-        Path staged = home.resolve(RUNTIME + ".new");
-        deleteTree(staged);
-        Files.move(dir.resolve(RUNTIME), staged, StandardCopyOption.ATOMIC_MOVE);
-        for(String f : FILES)
-            if(Files.exists(dir.resolve(f)))
-                Files.move(dir.resolve(f), home.resolve(f), StandardCopyOption.ATOMIC_MOVE);
+        Path target = home.resolve(runtime.getFileName());
+        deleteTree(target);
+        Files.move(runtime, target, StandardCopyOption.ATOMIC_MOVE);
+        deleteTree(home.resolve(APP));
+        Files.move(dir.resolve(APP), home.resolve(APP), StandardCopyOption.ATOMIC_MOVE);
+        Files.move(dir.resolve(EXE), home.resolve(EXE), StandardCopyOption.REPLACE_EXISTING);
+        if(Files.isRegularFile(dir.resolve(BAT)))
+            Files.move(dir.resolve(BAT), home.resolve(BAT), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** The <code>runtime-*</code> folder in <code>dir</code> with <code>bin/javaw.exe</code>; null if none. */
+    private static Path runtimeIn(Path dir) throws IOException {
+        try(Stream<Path> entries = Files.list(dir)) {
+            return entries.filter(p -> p.getFileName().toString().startsWith(RUNTIME + "-")
+                                       && Files.isRegularFile(p.resolve("bin").resolve("javaw.exe")))
+                          .findFirst().orElse(null);
+        }
     }
 
     /** Wait up to 60 s for <code>pid</code> to exit; <code>IOException</code> after that. */
@@ -133,10 +167,10 @@ public final class Updater {
         }
     }
 
-    /** <code>runtime/bin/javaw.exe -jar launcher.jar [--no-launcher-update]</code> in <code>home</code>; an
-     *  <code>IOException</code> is shown in a dialog. */
+    /** <code>Brodgar.exe [--no-launcher-update]</code> in <code>home</code>; an <code>IOException</code> is shown
+     *  in a dialog. */
     private void start(boolean asIs) {
-        List<String> cmd = new ArrayList<>(List.of(home.resolve(RUNTIME).resolve("bin").resolve("javaw.exe").toString(), "-jar", home.resolve(JAR).toString()));
+        List<String> cmd = new ArrayList<>(List.of(home.resolve(EXE).toString()));
         if(asIs)
             cmd.add("--no-launcher-update");
         try {
@@ -168,37 +202,90 @@ public final class Updater {
 
     // ---- called by the launcher --------------------------------------------------------------------------------
 
-    /** Copy <code>launcher.jar</code> to <code>update/updater.jar</code> and start {@link #main} from it with
-     *  this process's pid. An updater that exits within 1 s is an <code>IOException</code>. The caller exits. */
+    /** Copy <code>app/launcher.jar</code> to <code>update/updater.jar</code> and start {@link #main} from it, on
+     *  this launcher's runtime, with this process's pid. An updater that exits within 1 s is an
+     *  <code>IOException</code>. The caller exits. */
     static void launch(Path home, String version, String url) throws IOException, InterruptedException {
         Path dir = home.resolve(STAGING);
         deleteTree(dir);
         Files.createDirectories(dir);
         Path jar = dir.resolve("updater.jar");
-        Files.copy(home.resolve(JAR), jar);
-        Process p = new ProcessBuilder(home.resolve(RUNTIME).resolve("bin").resolve("javaw.exe").toString(), "-cp", jar.toString(), Updater.class.getName(),
+        Files.copy(home.resolve(APP).resolve(JAR), jar);
+        Process p = new ProcessBuilder(Launcher.javaw().toString(), "-cp", jar.toString(), Updater.class.getName(),
                                        home.toString(), Long.toString(ProcessHandle.current().pid()), version, url)
             .directory(home.toFile()).inheritIO().start();
         if(p.waitFor(1, TimeUnit.SECONDS))
             throw new IOException("the updater exited at once (code " + p.exitValue() + ")");
     }
 
-    /** Delete <code>update/</code>, retrying for 5 s (the updater that started this launcher may still hold its
-     *  jar); what remains waits for the next start. */
-    static void tidy(Path home) {
+    /** A launcher before v7 updated to this one: its updater put <code>launcher.jar</code> at the root and started
+     *  it on the old runtime, leaving the rest of the zip in <code>update/</code>. Finish: {@link #place} that and
+     *  start <code>Brodgar.exe</code> with <code>args</code>. True if this launcher is that jar and the folder is
+     *  there (the caller exits, a failure shown in a dialog); false otherwise. */
+    static boolean migrate(Path home, String[] args) {
         Path dir = home.resolve(STAGING);
-        for(int i = 0; (i < 20) && Files.exists(dir); i++) {
-            try {
-                deleteTree(dir);
-            } catch(IOException e) {
+        Path jar = Launcher.jar();
+        try {
+            if((jar == null) || !Files.isRegularFile(dir.resolve(EXE)) || !Files.isSameFile(jar, home.resolve(JAR)))
+                return false;
+            place(home, dir);
+            List<String> cmd = new ArrayList<>(List.of(home.resolve(EXE).toString()));
+            cmd.addAll(Arrays.asList(args));
+            new ProcessBuilder(cmd).directory(home.toFile()).inheritIO().start();
+        } catch(IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "The launcher could not be updated: " + reason(e) + "\n\nUnzip the launcher over " + home + " to mend it.",
+                                          Launcher.TITLE, JOptionPane.ERROR_MESSAGE);
+        }
+        return true;
+    }
+
+    /** What an update leaves for the launcher it installed: <code>update/</code>, the runtime folders of other
+     *  versions (those of launchers before v7 included, with their <code>launcher.jar</code> at the root).
+     *  Retried for 5 s: the updater that started this launcher may still hold its jar and its runtime. What is
+     *  still in use waits for the next start. */
+    static void tidy(Path home) {
+        for(int i = 0; i < 20; i++) {
+            List<Path> left = leftovers(home);
+            if(left.isEmpty())
+                return;
+            for(Path p : left) {
                 try {
-                    Thread.sleep(250);
-                } catch(InterruptedException x) {
-                    Thread.currentThread().interrupt();
-                    return;
+                    deleteTree(p);
+                } catch(IOException e) {
+                    // in use: again in a moment, or the next start
                 }
             }
+            try {
+                Thread.sleep(250);
+            } catch(InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
+    }
+
+    /** {@link #tidy}'s targets still present. */
+    private static List<Path> leftovers(Path home) {
+        List<Path> out = new ArrayList<>();
+        Path mine = Paths.get(System.getProperty("java.home"));
+        Path self = Launcher.jar();
+        try(Stream<Path> entries = Files.list(home)) {
+            for(Path p : entries.toList()) {
+                String name = p.getFileName().toString();
+                try {
+                    if(name.equals(STAGING)
+                       || (Files.isDirectory(p) && name.startsWith(RUNTIME) && !Files.isSameFile(p, mine))
+                       || (name.equals(JAR) && (self != null) && !Files.isSameFile(p, self)))
+                        out.add(p);
+                } catch(IOException e) {
+                    // gone meanwhile
+                }
+            }
+        } catch(IOException e) {
+            // home unreadable: nothing to tidy
+        }
+        return out;
     }
 
     /** Recursive delete; no-op if absent. */

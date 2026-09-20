@@ -12,14 +12,14 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Main class. Keeps <code>client/</code> at the channel's newest GitHub release and starts it on
- * <code>runtime/</code>. Home is the folder of <code>launcher.jar</code>, or <code>-Dlauncher.home</code>:
+ * Main class. Keeps <code>client/</code> at the channel's newest GitHub release and starts it on the runtime this
+ * launcher runs on. Home is <code>-Dlauncher.home</code> (Brodgar.exe sets it to its own folder), else the
+ * folder of the jar:
  * <pre>
- *   run.bat                starts launcher.jar on runtime/
- *   launcher.jar
- *   trailer.mp4            the trailer and its poster, beside the jar ({@link Trailer})
- *   trailer.jpg
- *   runtime/               jlink runtime; runs the launcher and the client
+ *   Brodgar.exe            starts the launcher, no console (jpackage): app/launcher.jar on runtime-<version>/
+ *   app/launcher.jar       the launcher; beside it the trailer and its poster ({@link Trailer}) and Brodgar.cfg
+ *   runtime-<version>/     jlink runtime; runs the launcher and the client ({@link Updater}: one per version)
+ *   run.bat                forwards to Brodgar.exe
  *   client/                the client release: hafen.jar, lib/, resource jars, addons/, haven-config.properties
  *   client/savedata/       client data; never written by the launcher
  *   client/installed-version
@@ -63,9 +63,11 @@ public final class Launcher {
         List<String> a = Arrays.asList(args);
         boolean check = a.contains("--check");
         Path home = home();
+        if(Updater.migrate(home, args))
+            return;
         Settings settings = Settings.load(home.resolve("launcher.properties"), !check);
         ClientInstall client = new ClientInstall(home.resolve("client"), home.resolve("cache"));
-        Path javaw = javaw(home);
+        Path javaw = javaw();
         boolean shipped = shipped(home);
         if(check) {
             check(home, settings, client, javaw, shipped);
@@ -453,24 +455,22 @@ public final class Launcher {
         return GitHubRelease.isVersion(version());
     }
 
-    /** True if running from <code>home/launcher.jar</code> with a manifest version and <code>home/runtime/</code>
-     *  present: the shipped layout, which self-update needs. False for a development run off the build folder. */
+    /** True if running from <code>home/app/launcher.jar</code> with a manifest version and
+     *  <code>home/Brodgar.exe</code> present: the shipped layout, which self-update needs. False for a development
+     *  run off the build folder, and on Steam. */
     static boolean shipped(Path home) {
         try {
             Path jar = jar();
-            return (jar != null) && (version() != null) && Files.isSameFile(jar, home.resolve("launcher.jar"))
-                && Files.isDirectory(home.resolve("runtime"));
+            return (jar != null) && (version() != null) && Files.isSameFile(jar, home.resolve("app").resolve("launcher.jar"))
+                && Files.isRegularFile(home.resolve("Brodgar.exe"));
         } catch(IOException e) {
-            return false;                           // no home/launcher.jar
+            return false;                           // no home/app/launcher.jar
         }
     }
 
-    /** <code>home/runtime/bin/javaw.exe</code> if present; else <code>java.home/bin/javaw.exe</code>, else
+    /** The Java this launcher runs on, for the client and the updater: <code>java.home/bin/javaw.exe</code>, else
      *  <code>java.home/bin/java</code>. */
-    static Path javaw(Path home) {
-        Path shipped = home.resolve("runtime").resolve("bin").resolve("javaw.exe");
-        if(Files.exists(shipped))
-            return shipped;
+    static Path javaw() {
         Path own = Paths.get(System.getProperty("java.home"), "bin", "javaw.exe");
         return Files.exists(own) ? own : Paths.get(System.getProperty("java.home"), "bin", "java");
     }
