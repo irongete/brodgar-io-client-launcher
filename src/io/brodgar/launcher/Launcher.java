@@ -350,7 +350,8 @@ public final class Launcher {
     /**
      * The client command line: <code>java -Xms -Xmx [-XX:+AlwaysPreTouch] [-XX:+UseZGC [-XX:+ZGenerational]]
      * [--sun-misc-unsafe-memory-access=allow] --add-exports ×3 --enable-native-access
-     * [-Dsun.java2d.uiScale.enabled=false] -Djava.net.preferIPv6Addresses= java.opts... -jar hafen.jar</code>.
+     * [-Dsun.java2d.uiScale.enabled=false] -Djava.net.preferIPv6Addresses= [-Dhaven.store=sqlite] java.opts...
+     * -jar hafen.jar</code>.
      * Client configuration is not here: see {@link ClientInstall#configure}.
      */
     static List<String> command(Path java, Settings.Launch l) {
@@ -375,6 +376,8 @@ public final class Launcher {
         if(!l.uiScale())
             cmd.add("-Dsun.java2d.uiScale.enabled=false");
         cmd.add("-Djava.net.preferIPv6Addresses=" + l.ipv6());
+        if(l.store().equals("sqlite"))
+            cmd.add("-Dhaven.store=sqlite");                 // absent: the client's default, files
         cmd.addAll(l.opts());
         cmd.add("-jar");
         cmd.add("hafen.jar");

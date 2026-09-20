@@ -69,6 +69,7 @@ final class OptionsDialog {
         JCheckBox uiScale = new JCheckBox("Let Windows scale the game window", settings.uiScale());
         JComboBox<String> ipv6 = new JComboBox<>(new String[] {"As Windows prefers", "IPv4 first", "IPv6 first"});
         ipv6.setSelectedIndex(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
+        JCheckBox sqlite = new JCheckBox("Use the SQLite store", settings.store().equals("sqlite"));
         JTextField opts = new JTextField(settings.javaOptsText(), 30);
         JTextField proxyUrl = new JTextField(settings.resourceProxyUrl(), 30);
         JCheckBox addonsOverride = new JCheckBox("Override addons folder", settings.addonsOverride());
@@ -91,7 +92,7 @@ final class OptionsDialog {
             Settings.Launch l = new Settings.Launch(heap.getValue() + "g", pretouch.isSelected(),
                 (gc.getSelectedIndex() == 1) ? "g1" : "zgc", uiScale.isSelected(),
                 switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; },
-                Settings.split(opts.getText()));
+                sqlite.isSelected() ? "sqlite" : "files", Settings.split(opts.getText()));
             preview.setText(String.join(" ", Launcher.command(java, l)));
             preview.setCaretPosition(0);
         };
@@ -101,6 +102,7 @@ final class OptionsDialog {
         gc.addActionListener(ev -> refresh.run());
         uiScale.addActionListener(ev -> refresh.run());
         ipv6.addActionListener(ev -> refresh.run());
+        sqlite.addActionListener(ev -> refresh.run());
         refresh.run();
 
         JPanel form = new JPanel(new GridBagLayout());
@@ -115,6 +117,8 @@ final class OptionsDialog {
               "Off: -Dsun.java2d.uiScale.enabled=false");
         r.add("Network addresses", ipv6,
               "-Djava.net.preferIPv6Addresses=system|false|true");
+        r.add(null, sqlite,
+              "-Dhaven.store=sqlite: the map and the resource cache in client/savedata/map.sqlite and rescache.sqlite; off: %APPDATA%\\Haven and Hearth\\data. Each store keeps its own data");
         r.add("Extra Java options", opts,
               "Appended to the JVM command line, space-separated");
         r.add("Resource cache address", proxyUrl,
@@ -135,6 +139,7 @@ final class OptionsDialog {
             settings.set("gc", (gc.getSelectedIndex() == 1) ? "g1" : "zgc");
             settings.set("ui.scale", String.valueOf(uiScale.isSelected()));
             settings.set("ipv6", switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; });
+            settings.set("store", sqlite.isSelected() ? "sqlite" : "files");
             settings.set("java.opts", opts.getText().trim());
             settings.set("resource.proxy.url", proxyUrl.getText().trim());
             settings.set("addons.override", String.valueOf(addonsOverride.isSelected()));

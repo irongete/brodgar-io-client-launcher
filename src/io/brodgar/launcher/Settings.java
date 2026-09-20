@@ -39,6 +39,10 @@ public final class Settings {
         # extra JVM arguments, space-separated
         java.opts=
 
+        # sqlite: -Dhaven.store=sqlite, the map and the resource cache in client/savedata/map.sqlite and
+        # rescache.sqlite; files: %APPDATA%\\Haven and Hearth\\data, the game's own store
+        store=files
+
         # release: non-prerelease tags only; beta: all tags
         channel=beta
 
@@ -112,6 +116,7 @@ public final class Settings {
     boolean uiScale()         {return "true".equalsIgnoreCase(get("ui.scale", "false"));}
     String ipv6()             {String v = get("ipv6", "system").toLowerCase(); return (v.equals("true") || v.equals("false")) ? v : "system";}
     String javaOptsText()     {return get("java.opts", "");}
+    String store()            {return "sqlite".equalsIgnoreCase(get("store", "files")) ? "sqlite" : "files";}
     String repo()             {return get("repo", "irongete/brodgar-io-client");}
     String assetPrefix()      {return get("asset.prefix", "brodgar.io-client-");}
     String launcherRepo()     {return get("launcher.repo", "irongete/brodgar-io-client-launcher");}
@@ -132,11 +137,11 @@ public final class Settings {
 
     /** {@link Launch} from the current values. */
     Launch launch() {
-        return new Launch(heap(), pretouch(), gc(), uiScale(), ipv6(), split(javaOptsText()));
+        return new Launch(heap(), pretouch(), gc(), uiScale(), ipv6(), store(), split(javaOptsText()));
     }
 
     /** Inputs of {@link Launcher#command}. */
-    record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, List<String> opts) {}
+    record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, String store, List<String> opts) {}
 
     /** Lines the launcher owns in <code>client/haven-config.properties</code>, in write order:
      *  <code>haven.resurl</code>, <code>haven.addondir</code>, <code>haven.savedatadir</code>. A null value
