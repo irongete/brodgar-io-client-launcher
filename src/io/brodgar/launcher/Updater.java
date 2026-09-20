@@ -95,8 +95,8 @@ public final class Updater {
             u.start(false);
         } catch(Exception e) {
             e.printStackTrace();
-            u.status("Launcher " + version + " could not be installed.");
-            JOptionPane.showMessageDialog(u.frame, "Launcher " + version + " could not be installed: " + reason(e)
+            u.status("Launcher v" + version + " could not be installed.");
+            JOptionPane.showMessageDialog(u.frame, "Launcher v" + version + " could not be installed: " + reason(e)
                                           + "\n\nThe launcher goes on as it is, and tries again the next time it starts.",
                                           u.frame.getTitle(), JOptionPane.ERROR_MESSAGE);
             u.start(true);
@@ -110,9 +110,9 @@ public final class Updater {
         waitFor(pid);
         Path dir = home.resolve(STAGING);
         Path zip = dir.resolve("launcher.zip");
-        status("Downloading launcher " + version + "...");
+        status("Downloading the launcher...");
         GitHubRelease.download(url, zip, this::progress);
-        status("Installing launcher " + version + "...");
+        status("Installing the launcher...");
         Unzip.unpack(zip, dir);
         Files.delete(zip);
         if(!Files.isRegularFile(dir.resolve(JAR)) || !Files.isRegularFile(dir.resolve(RUNTIME).resolve("bin").resolve("javaw.exe")))

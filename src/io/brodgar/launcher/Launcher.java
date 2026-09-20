@@ -165,10 +165,10 @@ public final class Launcher {
             return;
         String v = GitHubRelease.version(tag);
         try {
-            ui.status("Launcher " + v + " is out: updating...");
+            ui.status("Launcher v" + v + " is out: updating...");
             Updater.launch(home, v, GitHubRelease.assetUrl(settings.launcherRepo(), tag, Updater.ASSET));
         } catch(Exception e) {
-            ui.status("Launcher " + v + " could not be installed: " + e.getMessage());
+            ui.status("Launcher v" + v + " could not be installed: " + e.getMessage());
             Updater.tidy(home);
             return;
         }
