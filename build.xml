@@ -17,8 +17,8 @@
      ignored by git). javac compiles against them and jlink puts them in the runtime. Nothing runs on jmods, so
      the development runs (`run`, `check`) go on the runtime the build just cut. The Workshop item runs on
      Steam's Java instead, so it carries the OpenJFX SDK of the same version, `javafx.sdk` (javafx-sdk-*,
-     likewise), on its module path. The trailer itself, etc/trailer.mp4 and its poster, travels beside the jar
-     in every layout, the build folder included. -->
+     likewise), on its module path. The trailer and its poster, media/, travel as that folder beside the jar in
+     every layout, the build folder included. -->
 <project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
@@ -53,8 +53,7 @@
   </target>
 
   <!-- The version travels in the manifest: the window title reads it back as Implementation-Version. The window
-       icon rides in the jar beside the classes; the trailer's files go beside the jar, where the launcher looks
-       for them. -->
+       icon rides in the jar beside the classes; media/ goes beside the jar, where the launcher looks for it. -->
   <target name="jar" depends="compile">
     <jar destfile="build/launcher.jar">
       <fileset dir="build/classes" />
@@ -65,8 +64,8 @@
         <attribute name="Implementation-Version" value="${version}" />
       </manifest>
     </jar>
-    <copy todir="build">
-      <fileset dir="etc" includes="trailer.*" />
+    <copy todir="build/media">
+      <fileset dir="media" />
     </copy>
   </target>
 
@@ -87,13 +86,13 @@
     </exec>
   </target>
 
-  <!-- The folder handed to a player: the jar, the trailer, run.bat (CRLF, as a .bat is read), and the runtime. -->
+  <!-- The folder handed to a player: the jar, media/, run.bat (CRLF, as a .bat is read), and the runtime. -->
   <target name="dist" depends="jar, runtime">
     <delete dir="build/dist" />
     <mkdir dir="build/dist/${app.name}" />
     <copy file="build/launcher.jar" todir="build/dist/${app.name}" />
-    <copy todir="build/dist/${app.name}">
-      <fileset dir="etc" includes="trailer.*" />
+    <copy todir="build/dist/${app.name}/media">
+      <fileset dir="media" />
     </copy>
     <fixcrlf srcdir="etc" includes="run.bat" destdir="build/dist/${app.name}" eol="crlf" />
     <copy todir="build/dist/${app.name}/runtime">
@@ -102,7 +101,7 @@
     <echo message="Launcher ready: build/dist/${app.name}/run.bat" />
   </target>
 
-  <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), the trailer, and
+  <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), media/, and
        the OpenJFX SDK as javafx/ (lib/ on the module path, bin/ its DLLs, found from there), the whole folder
        being what the client's upload tool sends (README.md, "Steam Workshop"). No runtime: on Steam the
        launcher runs on the Java Steam ships with the game, and so does the client. -->
@@ -110,8 +109,8 @@
     <delete dir="build/workshop" />
     <mkdir dir="build/workshop" />
     <copy file="build/launcher.jar" todir="build/workshop" />
-    <copy todir="build/workshop">
-      <fileset dir="etc" includes="trailer.*" />
+    <copy todir="build/workshop/media">
+      <fileset dir="media" />
     </copy>
     <copy todir="build/workshop">
       <fileset dir="workshop" />

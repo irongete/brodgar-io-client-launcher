@@ -29,7 +29,7 @@ import javax.swing.WindowConstants;
  * <code>update/updater.jar</code> (the running jar is locked) and starts this class from it; the launcher then
  * exits. {@link #main}: wait for the launcher pid, download the release zip into <code>update/</code>, unpack,
  * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code>,
- * <code>launcher.jar</code> and the trailer's files into <code>home</code>, start <code>run.bat</code>, exit.
+ * <code>launcher.jar</code> and <code>media/</code> into <code>home</code>, start <code>run.bat</code>, exit.
  * <code>run.bat</code> swaps <code>runtime.new/</code> in and starts the new launcher on it: it runs two
  * seconds after this process is gone, since the runtime cannot be replaced while a process runs on it
  * ({@link #start}). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
@@ -39,8 +39,9 @@ import javax.swing.WindowConstants;
  */
 public final class Updater {
     private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** What moves into <code>home</code> besides the runtime: the trailer's files when the zip has them. */
-    private static final List<String> FILES = List.of(BAT, JAR, Trailer.VIDEO, Trailer.POSTER);
+    /** What moves into <code>home</code> besides the runtime, each replaced when the zip has it: the two files
+     *  and <code>media/</code>, the trailer's folder. */
+    private static final List<String> FILES = List.of(BAT, JAR, Trailer.DIR);
     /** The release asset, as build.xml names it: the same for every release, since the folder a player unzips
      *  keeps its name while the launcher inside updates itself. */
     static final String ASSET = "brodgar.io-launcher.zip";
@@ -119,9 +120,13 @@ public final class Updater {
         Path staged = home.resolve(RUNTIME + ".new");
         deleteTree(staged);
         Files.move(dir.resolve(RUNTIME), staged, StandardCopyOption.ATOMIC_MOVE);
-        for(String f : FILES)
-            if(Files.exists(dir.resolve(f)))
-                Files.move(dir.resolve(f), home.resolve(f), StandardCopyOption.ATOMIC_MOVE);
+        for(String f : FILES) {
+            if(!Files.exists(dir.resolve(f)))
+                continue;
+            if(Files.isDirectory(home.resolve(f)))
+                deleteTree(home.resolve(f));
+            Files.move(dir.resolve(f), home.resolve(f), StandardCopyOption.ATOMIC_MOVE);
+        }
     }
 
     /** Wait up to 60 s for <code>pid</code> to exit; <code>IOException</code> after that. */

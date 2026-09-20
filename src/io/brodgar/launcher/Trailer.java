@@ -29,8 +29,8 @@ import javafx.util.Duration;
 
 /**
  * The game's trailer, 640x360 at {@link Ui#SCALE} at the top of the window: <code>trailer.mp4</code> (720p H.264 + AAC) played by
- * JavaFX Media, under <code>trailer.jpg</code> until it plays. Both are beside <code>launcher.jar</code> (the
- * Steam item's folder, or home). A click on the video plays or pauses it; a double click fills the screen with
+ * JavaFX Media, under <code>trailer.jpg</code> until it plays. Both are in <code>media/</code> beside
+ * <code>launcher.jar</code> (in the Steam item's folder, or home). A click on the video plays or pauses it; a double click fills the screen with
  * it alone ({@link Ui}) and back (as does Esc) — the click's pause waits a moment, in case a second one comes.
  * A bar along the bottom, there while the mouse is over the video, has the position (drag or click to seek)
  * and the time. At the end it stops: the poster again, a click plays it from the start. Without the video: the
@@ -38,13 +38,15 @@ import javafx.util.Duration;
  */
 final class Trailer extends StackPane {
     static final double WIDTH = 640 * Ui.SCALE, HEIGHT = 360 * Ui.SCALE;
+    /** The folder beside the jar with the video and the poster. */
+    static final String DIR = "media";
     static final String VIDEO = "trailer.mp4", POSTER = "trailer.jpg";
     /** The same trailer on YouTube: the link under the video. */
     static final String YOUTUBE = "https://www.youtube.com/watch?v=_HbQlAjre2Q";
     /** Null without the video. */
     private MediaPlayer player;
 
-    /** <code>dir</code>: the folder of the two files. */
+    /** <code>dir</code>: the folder of the two files, {@link #DIR}. */
     Trailer(Path dir) {
         setPrefSize(WIDTH, HEIGHT);
         // the video and the poster take the pane's size, and a MediaView's minimum is its current size: without

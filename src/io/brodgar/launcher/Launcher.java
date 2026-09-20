@@ -17,8 +17,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  *   run.bat                starts launcher.jar on runtime/
  *   launcher.jar
- *   trailer.mp4            the trailer and its poster, beside the jar ({@link Trailer})
- *   trailer.jpg
+ *   media/                 the trailer and its poster, beside the jar ({@link Trailer})
  *   runtime/               jlink runtime; runs the launcher and the client
  *   client/                the client release: hafen.jar, lib/, resource jars, addons/, haven-config.properties
  *   client/savedata/       client data; never written by the launcher
@@ -73,7 +72,7 @@ public final class Launcher {
         }
         Launcher[] l = new Launcher[1];
         Path jar = jar();
-        Ui ui = Ui.open(TITLE, settings, (jar != null) ? jar.getParent() : home, c -> l[0].channel(c), on -> l[0].proxy(on), () -> l[0].options(), () -> l[0].clientFolder());
+        Ui ui = Ui.open(TITLE, settings, ((jar != null) ? jar.getParent() : home).resolve(Trailer.DIR), c -> l[0].channel(c), on -> l[0].proxy(on), () -> l[0].options(), () -> l[0].clientFolder());
         l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
