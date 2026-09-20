@@ -17,7 +17,6 @@ Windows only; it brings its own Java.
 On Steam, subscribe to the *Brodgar* item in the Workshop of Haven & Hearth and pick it in the game's
 launcher; the files then live in `%LOCALAPPDATA%\Brodgar.io`.
 
-The trailer at the top plays on a click; a double-click makes it full screen (Esc comes back).
 **Start the client with a console window** shows what the game prints, for when it will not start;
 `client.log` keeps the same for the last run. **Open client folder** opens `client/`: `savedata` is your
 game data, `addons` your addons.
