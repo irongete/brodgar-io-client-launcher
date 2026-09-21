@@ -9,8 +9,7 @@ Windows only; it brings its own Java.
   pack**, `client/brodgar-res.jar`, holds every resource from the first start (one download of about
   250 MB; renewed at most monthly, and only when there is something new), and the **resource cache**
   answers what the pack has not got in a fraction of the official server's time.
-  `launcher.properties`: `resource.pack`, `resource.pack.url`, `resource.pack.renew.days`,
-  `resource.proxy`, `resource.proxy.url`.
+  `launcher.properties`: `resource.pack`, `resource.pack.url`, `resource.pack.renew.days`, `resource.proxy`.
 - **Starts the game** with the memory and Java options you set in **Options...**.
 
 ## How to use

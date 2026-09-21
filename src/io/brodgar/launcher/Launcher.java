@@ -353,7 +353,7 @@ public final class Launcher {
      * The client command line: <code>java -Xms -Xmx [-XX:+AlwaysPreTouch] [-XX:+UseZGC [-XX:+ZGenerational]]
      * [--sun-misc-unsafe-memory-access=allow] --add-exports ×3 --enable-native-access
      * [-Dsun.java2d.uiScale.enabled=false] -Djava.net.preferIPv6Addresses= [-Dhaven.store=sqlite] java.opts...
-     * -jar hafen.jar</code>.
+     * -jar hafen.jar [-U resourceCacheUrl]</code>.
      * Client configuration is not here: see {@link ClientInstall#configure}.
      */
     static List<String> command(Path java, Settings.Launch l) {
@@ -383,6 +383,10 @@ public final class Launcher {
         cmd.addAll(l.opts());
         cmd.add("-jar");
         cmd.add("hafen.jar");
+        if(l.resourceCacheUrl() != null) {
+            cmd.add("-U");
+            cmd.add(l.resourceCacheUrl());
+        }
         return cmd;
     }
 
@@ -411,7 +415,7 @@ public final class Launcher {
         } catch(Exception e) {
             System.out.println("newest:    unreachable: " + e);
         }
-        System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
+        System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + Settings.RESOURCE_PROXY_URL : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
         System.out.println("pack:      " + (!settings.resourcePack() ? "off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
         System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("setup:     " + (settings.firstRun() ? "pending (firstrun=true): the first-start setup opens before the window" : "done"));

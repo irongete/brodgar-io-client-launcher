@@ -59,8 +59,6 @@ final class OptionsDialog {
         CheckBox sqlite = new CheckBox("Use the SQLite store");
         sqlite.setSelected(settings.store().equals("sqlite"));
         TextField opts = new TextField(settings.javaOptsText());
-        TextField proxyUrl = new TextField(settings.resourceProxyUrl());
-        proxyUrl.disableProperty().bind(proxy.selectedProperty().not());
         CheckBox addonsOverride = new CheckBox("Override addons folder");
         addonsOverride.setSelected(settings.addonsOverride());
         TextField addonsDir = new TextField(settings.addonsDir());
@@ -82,7 +80,8 @@ final class OptionsDialog {
             Settings.Launch l = new Settings.Launch(gb(heap) + "g", pretouch.isSelected(),
                 (gc.getSelectionModel().getSelectedIndex() == 1) ? "g1" : "zgc", uiScale.isSelected(),
                 switch(ipv6.getSelectionModel().getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; },
-                sqlite.isSelected() ? "sqlite" : "files", Settings.split(opts.getText()));
+                sqlite.isSelected() ? "sqlite" : "files", Settings.split(opts.getText()),
+                proxy.isSelected() ? Settings.RESOURCE_PROXY_URL : null);
             preview.setText(String.join(" ", Launcher.command(java, l)));
             preview.positionCaret(0);
         };
@@ -92,6 +91,7 @@ final class OptionsDialog {
         gc.setOnAction(ev -> refresh.run());
         uiScale.setOnAction(ev -> refresh.run());
         ipv6.setOnAction(ev -> refresh.run());
+        proxy.setOnAction(ev -> refresh.run());
         sqlite.setOnAction(ev -> refresh.run());
         refresh.run();
 
@@ -109,13 +109,11 @@ final class OptionsDialog {
         r.add(null, pack,
               "Download every game resource in one pack (about 250 MB, once) instead of one by one as the game needs them");
         r.add(null, proxy,
-              "Fetch the resource files from the brodgar.io cache instead of the Haven server: about x2.5 faster");
+              "Fetch the resource files from " + Settings.RESOURCE_PROXY_URL + " instead of the Haven server: about x2.5 faster (-U on the client's command line)");
         r.add(null, sqlite,
               "Keep the map and the resource files in SQLite: map reads about x10 faster");
         r.add("Extra Java options", opts,
               "Appended to the JVM command line, space-separated");
-        r.add("Resource cache address", proxyUrl,
-              "haven.resurl in client/haven-config.properties while the resource cache is on");
         r.labelled(addonsOverride, addonsDir,
               "haven.addondir in client/haven-config.properties; off: client/addons");
         r.labelled(savedataOverride, savedataDir,
@@ -148,7 +146,6 @@ final class OptionsDialog {
             settings.set("resource.proxy", String.valueOf(proxy.isSelected()));
             settings.set("store", sqlite.isSelected() ? "sqlite" : "files");
             settings.set("java.opts", opts.getText().trim());
-            settings.set("resource.proxy.url", proxyUrl.getText().trim());
             settings.set("addons.override", String.valueOf(addonsOverride.isSelected()));
             settings.set("addons.dir", addonsDir.getText().trim());
             settings.set("savedata.override", String.valueOf(savedataOverride.isSelected()));

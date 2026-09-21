@@ -18,6 +18,9 @@ import java.util.Properties;
  * written back at once as one <code>key=value</code> line ({@link #writeLine}); other lines are kept.
  */
 public final class Settings {
+    /** Fixed address of the brodgar.io resource cache: not user-editable. */
+    static final String RESOURCE_PROXY_URL = "https://res.brodgar.io/";
+
     private static final String DEFAULTS = """
         # brodgar.io launcher settings. A missing key takes its default. See README.md, "Settings".
 
@@ -49,10 +52,10 @@ public final class Settings {
         # true: java.exe in a cmd window; false: javaw.exe, output to client.log
         console=false
 
-        # haven.resurl in client/haven-config.properties := resource.proxy ? resource.proxy.url : resource.url
+        # haven.resurl in client/haven-config.properties, and -U on the client's command line, :=
+        # resource.proxy ? RESOURCE_PROXY_URL : resource.url
         resource.proxy=false
         resource.url=https://game.havenandhearth.com/res/
-        resource.proxy.url=https://res.brodgar.io/
 
         # the brodgar.io resource pack, client/brodgar-res.jar: every resource from the first start; downloaded
         # when missing, renewed when the server's is newer and the installed one is older than
@@ -128,7 +131,6 @@ public final class Settings {
     boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}
     boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
     String resourceUrl()      {return get("resource.url", "https://game.havenandhearth.com/res/");}
-    String resourceProxyUrl() {return get("resource.proxy.url", "https://res.brodgar.io/");}
     boolean resourcePack()    {return !"false".equalsIgnoreCase(get("resource.pack", "true"));}
     String resourcePackUrl()  {return get("resource.pack.url", "https://brodgar.io/res/?jar");}
     int resourcePackRenewDays() {try {return Math.max(0, Integer.parseInt(get("resource.pack.renew.days", "30")));} catch(NumberFormatException e) {return 30;}}
@@ -142,17 +144,20 @@ public final class Settings {
 
     /** {@link Launch} from the current values. */
     Launch launch() {
-        return new Launch(heap(), pretouch(), gc(), uiScale(), ipv6(), store(), split(javaOptsText()));
+        return new Launch(heap(), pretouch(), gc(), uiScale(), ipv6(), store(), split(javaOptsText()),
+                          resourceProxy() ? RESOURCE_PROXY_URL : null);
     }
 
-    /** Inputs of {@link Launcher#command}. */
-    record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, String store, List<String> opts) {}
+    /** Inputs of {@link Launcher#command}. <code>resourceCacheUrl</code>, when not null, is passed as
+     *  <code>-U</code>. */
+    record Launch(String heap, boolean pretouch, String gc, boolean uiScale, String ipv6, String store,
+                  List<String> opts, String resourceCacheUrl) {}
 
     /** Lines the launcher owns in <code>client/haven-config.properties</code>, in write order:
      *  <code>haven.resurl</code>, <code>haven.addondir</code>, <code>haven.savedatadir</code>. A null value
      *  means the line is removed: an override that is off, or on with no folder. */
     Map<String, String> clientConfig() {
-        return clientConfig(resourceProxy(), resourceUrl(), resourceProxyUrl(),
+        return clientConfig(resourceProxy(), resourceUrl(), RESOURCE_PROXY_URL,
                             addonsOverride() ? addonsDir() : "", savedataOverride() ? savedataDir() : "");
     }
 
