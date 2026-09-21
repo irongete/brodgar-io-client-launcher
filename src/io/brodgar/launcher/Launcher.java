@@ -28,7 +28,9 @@ import java.util.concurrent.TimeUnit;
  *   client.log             stdout/stderr of the last client run
  * </pre>
  *
- * <p>Start: window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped, released launchers only), {@link #update}
+ * <p>Start: the first-start setup while <code>firstrun</code> is on ({@link FirstRunDialog}: the resource pack,
+ * the resource cache, the SQLite store and the game's memory, a page each, written on Finish), then the
+ * window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped, released launchers only), {@link #update}
  * (release check, download, unpack), {@link Ui#ready} with Play or Retry, or {@link Ui#idle}. Play:
  * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
  * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written when Options
@@ -70,6 +72,8 @@ public final class Launcher {
             check(home, settings, client, javaw, shipped);
             return;
         }
+        if(settings.firstRun())
+            FirstRunDialog.show(settings);
         Launcher[] l = new Launcher[1];
         Path jar = jar();
         Ui ui = Ui.open(TITLE, settings, ((jar != null) ? jar.getParent() : home).resolve(Trailer.DIR), c -> l[0].channel(c), () -> l[0].options(), () -> l[0].clientFolder());
@@ -406,6 +410,7 @@ public final class Launcher {
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
         System.out.println("pack:      " + (!settings.resourcePack() ? "off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
         System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
+        System.out.println("setup:     " + (settings.firstRun() ? "pending (firstrun=true): the first-start setup opens before the window" : "done"));
         System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
         System.out.println("command:   " + String.join(" ", command(javaw, settings)));
         if(settings.console())

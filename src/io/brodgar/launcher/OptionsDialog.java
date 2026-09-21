@@ -47,21 +47,8 @@ final class OptionsDialog {
         d.setIconImage(Launcher.icon());
 
         long totalGb = totalMemoryGb();
-        int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB + 1, Math.min(CAP_GB, totalGb / 2));
-        JSlider heap = new JSlider(MIN_GB, maxGb, Math.max(MIN_GB, Math.min(maxGb, heapGb(settings.heap()))));
-        int step = (maxGb - MIN_GB > 8) ? 2 : 1;             // label every GB up to 9 labels, else every 2
-        heap.setMajorTickSpacing(step);
-        heap.setMinorTickSpacing(1);
-        heap.setLabelTable(heap.createStandardLabels(step, (step == 1) ? MIN_GB : 2));   // even labels at step 2
-        heap.setPaintTicks(true);
-        heap.setPaintLabels(true);
-        heap.setSnapToTicks(true);
-        JLabel heapValue = new JLabel(heap.getValue() + " GB");
-        heapValue.setFont(heapValue.getFont().deriveFont(Font.BOLD));
-        heapValue.setPreferredSize(new Dimension(52, heapValue.getPreferredSize().height));
-        JPanel heapRow = new JPanel(new BorderLayout(8, 0));
-        heapRow.add(heap, BorderLayout.CENTER);
-        heapRow.add(heapValue, BorderLayout.EAST);
+        JSlider heap = heapSlider(settings.heap(), totalGb);
+        JPanel heapRow = heapRow(heap);
         JCheckBox pretouch = new JCheckBox("Reserve it all at start", settings.pretouch());
         JComboBox<String> gc = new JComboBox<>(new String[] {"Concurrent (ZGC): frees memory while the game keeps running",
                                                               "Standard (G1): frees memory in short stops"});
@@ -92,7 +79,6 @@ final class OptionsDialog {
         preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(10, preview.getFont().getSize() - 2)));
 
         Runnable refresh = () -> {
-            heapValue.setText(heap.getValue() + " GB");
             Settings.Launch l = new Settings.Launch(heap.getValue() + "g", pretouch.isSelected(),
                 (gc.getSelectedIndex() == 1) ? "g1" : "zgc", uiScale.isSelected(),
                 switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; },
@@ -176,6 +162,44 @@ final class OptionsDialog {
         d.setResizable(false);
         d.setLocationRelativeTo(owner);
         d.setVisible(true);
+    }
+
+    /** The heap slider: {@link #MIN_GB} to <code>max(MIN_GB + 1, min(CAP_GB, totalGb / 2))</code>, 8 when the
+     *  memory is unknown, at <code>heap</code>'s value clamped into that range. Also the setup's
+     *  ({@link FirstRunDialog}). */
+    static JSlider heapSlider(String heap, long totalGb) {
+        int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB + 1, Math.min(CAP_GB, totalGb / 2));
+        JSlider s = new JSlider(MIN_GB, maxGb, Math.max(MIN_GB, Math.min(maxGb, heapGb(heap))));
+        int step = (maxGb - MIN_GB > 8) ? 2 : 1;             // label every GB up to 9 labels, else every 2
+        s.setMajorTickSpacing(step);
+        s.setMinorTickSpacing(1);
+        s.setLabelTable(s.createStandardLabels(step, (step == 1) ? MIN_GB : 2));   // even labels at step 2
+        s.setPaintTicks(true);
+        s.setPaintLabels(true);
+        s.setSnapToTicks(true);
+        return s;
+    }
+
+    /** The slider with its value, <code>N GB</code> in bold, at its right, following it. */
+    static JPanel heapRow(JSlider heap) {
+        JLabel value = new JLabel(heap.getValue() + " GB");
+        value.setFont(value.getFont().deriveFont(Font.BOLD));
+        value.setPreferredSize(new Dimension(52, value.getPreferredSize().height));
+        heap.addChangeListener(ev -> value.setText(heap.getValue() + " GB"));
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.add(heap, BorderLayout.CENTER);
+        row.add(value, BorderLayout.EAST);
+        return row;
+    }
+
+    /** The system look and feel for a Swing window; the cross-platform one stays if it fails. Set before each
+     *  Swing dialog, since the main window is JavaFX. */
+    static void systemLookAndFeel() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch(Exception e) {
+            // cross-platform look and feel then
+        }
     }
 
     /** <code>Ng</code> → N; <code>Nm</code> → ceil(N / 1024); else <code>MIN_GB</code>. */

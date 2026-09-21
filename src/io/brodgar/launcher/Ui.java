@@ -31,7 +31,6 @@ import javafx.scene.text.Font;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 
 /**
  * The main window, in JavaFX (the trailer is JavaFX Media, and a Swing window would copy every frame out of the
@@ -275,11 +274,7 @@ final class Ui {
     void swingDialog(Runnable dialog, Runnable after) {
         controls.setDisable(true);
         SwingUtilities.invokeLater(() -> {
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch(Exception e) {
-                // cross-platform look and feel then
-            }
+            OptionsDialog.systemLookAndFeel();
             try {
                 dialog.run();
             } finally {

@@ -72,6 +72,10 @@ public final class Settings {
         # false: no release lookup for the launcher or the client
         check.updates=true
 
+        # true: the first-start setup, one page each for the resource pack, the resource cache, the SQLite
+        # store and the game's memory, before the window; the setup writes false when it is finished
+        firstrun=true
+
         # GitHub owner/repo of the client releases; asset name = <asset.prefix><tag>.zip
         repo=irongete/brodgar-io-client
         asset.prefix=brodgar.io-client-
@@ -134,6 +138,7 @@ public final class Settings {
     boolean savedataOverride() {return "true".equalsIgnoreCase(get("savedata.override", "false"));}
     String savedataDir()      {return get("savedata.dir", "");}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
+    boolean firstRun()        {return !"false".equalsIgnoreCase(get("firstrun", "true"));}
 
     /** {@link Launch} from the current values. */
     Launch launch() {
