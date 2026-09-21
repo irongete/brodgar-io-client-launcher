@@ -5,12 +5,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -28,9 +31,10 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
+import javafx.stage.Modality;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
-import javax.swing.SwingUtilities;
 
 /**
  * The main window, in JavaFX (the trailer is JavaFX Media, and a Swing window would copy every frame out of the
@@ -43,16 +47,16 @@ import javax.swing.SwingUtilities;
  * alone, on black; Esc brings the window back.
  *
  * <p>Everything is drawn at {@link #SCALE}: the base font size times it, which sizes the controls (Modena
- * measures them in em), and every margin and the trailer likewise.
- *
- * <p>Options is still a Swing dialog ({@link OptionsDialog}): {@link #swingDialog} shows it beside this window.
+ * measures them in em), and every margin and the trailer likewise. The dialogs ({@link OptionsDialog},
+ * {@link FirstRunDialog}, the error alert) are drawn the same way: {@link #dialog} makes their windows.
  *
  * <p>The window icon is {@link Launcher#ICON}.
  */
 final class Ui {
     /** The window's size, as a factor on the design at 1: a 640x360 trailer, 12 px text. */
     static final double SCALE = 1.3;
-    private static final String FONT = "-fx-font-size: " + (Font.getDefault().getSize() * SCALE) + "px;";
+    /** The style that draws a window's root at {@link #SCALE}: the base font size times it. */
+    static final String FONT = "-fx-font-size: " + (Font.getDefault().getSize() * SCALE) + "px;";
 
     private final Stage stage;
     private final VBox root;
@@ -67,14 +71,7 @@ final class Ui {
     private volatile Runnable action;
 
     private Ui(String title, Settings settings, Path trailerDir, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
-        stage = new Stage();
-        stage.setTitle(title);
-        try(InputStream icon = Launcher.class.getResourceAsStream(Launcher.ICON)) {
-            if(icon != null)
-                stage.getIcons().add(new Image(icon));
-        } catch(IOException e) {
-            // no icon then
-        }
+        stage = window(title);
         trailer = new Trailer(trailerDir);
         Hyperlink link = new Hyperlink("Watch the trailer on YouTube");
         // a quiet blue, no focus ring, flush with the video's left edge; the row around it keeps it there
@@ -174,26 +171,42 @@ final class Ui {
         root.setStyle(full ? FONT + "-fx-background-color: black;" : FONT);
     }
 
-    /** Build and show the window on the JavaFX thread, starting JavaFX; controls start from
-     *  <code>settings</code>, the trailer's files are in <code>trailerDir</code>. The callbacks run on the JavaFX
-     *  thread. */
+    /** Start JavaFX, before any window ({@link FirstRunDialog}, {@link #open}); once. It stays up between
+     *  windows: closing the last one does not end it (the windows that end the launcher exit the process). */
+    static void startup() {
+        Platform.startup(() -> Platform.setImplicitExit(false));
+    }
+
+    /** Build and show the window on the JavaFX thread; controls start from <code>settings</code>, the trailer's
+     *  files are in <code>trailerDir</code>. The callbacks run on the JavaFX thread. After {@link #startup}. */
     static Ui open(String title, Settings settings, Path trailerDir, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
         Ui[] out = new Ui[1];
+        runAndWait(() -> out[0] = new Ui(title, settings, trailerDir, onChannel, onOptions, onClientFolder));
+        return out[0];
+    }
+
+    /** Run <code>r</code> on the JavaFX thread and wait for it, from any other thread; a
+     *  <code>RuntimeException</code> out of it is rethrown here. After {@link #startup}. */
+    static void runAndWait(Runnable r) {
         RuntimeException[] failed = new RuntimeException[1];
-        CountDownLatch built = new CountDownLatch(1);
-        Platform.startup(() -> {
+        CountDownLatch done = new CountDownLatch(1);
+        Platform.runLater(() -> {
             try {
-                out[0] = new Ui(title, settings, trailerDir, onChannel, onOptions, onClientFolder);
+                r.run();
             } catch(RuntimeException e) {
                 failed[0] = e;
             } finally {
-                built.countDown();
+                done.countDown();
             }
         });
-        await(built);
+        await(done);
         if(failed[0] != null)
             throw new IllegalStateException(failed[0]);
-        return out[0];
+    }
+
+    /** The window the dialogs open over. */
+    Stage stage() {
+        return stage;
     }
 
     void status(String s) {
@@ -250,44 +263,58 @@ final class Ui {
             alert.initOwner(stage);
             alert.setTitle(stage.getTitle());
             alert.setHeaderText(null);
+            alert.getDialogPane().setStyle(FONT);
             alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
             alert.showAndWait();
         };
-        if(Platform.isFxApplicationThread()) {
+        if(Platform.isFxApplicationThread())
             show.run();
-            return;
-        }
-        CountDownLatch done = new CountDownLatch(1);
-        Platform.runLater(() -> {
-            try {
-                show.run();
-            } finally {
-                done.countDown();
-            }
-        });
-        await(done);
-    }
-
-    /** A modal Swing dialog, from the JavaFX thread: <code>dialog</code> runs on the Swing thread, the controls
-     *  disabled meanwhile (Swing's modality does not reach this window); then <code>after</code>, back on the
-     *  JavaFX thread. */
-    void swingDialog(Runnable dialog, Runnable after) {
-        controls.setDisable(true);
-        SwingUtilities.invokeLater(() -> {
-            OptionsDialog.systemLookAndFeel();
-            try {
-                dialog.run();
-            } finally {
-                Platform.runLater(() -> {
-                    controls.setDisable(false);
-                    after.run();
-                });
-            }
-        });
+        else
+            runAndWait(show);
     }
 
     void close() {
         Platform.runLater(stage::close);
+    }
+
+    /** A modal dialog's window, on the JavaFX thread: <code>root</code> at {@link #SCALE}, not resizable, over
+     *  <code>owner</code>, which it blocks — centered on it and kept on its screen ({@link #place}), or centered
+     *  on the screen when there is none (the first-start setup, before the window). The caller shows it:
+     *  <code>showAndWait</code>. */
+    static Stage dialog(Stage owner, String title, Parent root) {
+        Stage d = window(title);
+        root.setStyle(FONT);
+        d.setScene(new Scene(root));
+        d.setResizable(false);
+        d.initModality(Modality.WINDOW_MODAL);
+        if(owner != null) {
+            d.initOwner(owner);
+            d.setOnShown(ev -> place(d, owner));
+        }
+        return d;
+    }
+
+    /** <code>d</code>, just shown, so its size is known: no taller than the owner's screen (Options scrolls
+     *  then), centered on the owner, whole on the screen. */
+    private static void place(Stage d, Stage owner) {
+        List<Screen> on = Screen.getScreensForRectangle(owner.getX(), owner.getY(), owner.getWidth(), owner.getHeight());
+        Rectangle2D screen = (on.isEmpty() ? Screen.getPrimary() : on.get(0)).getVisualBounds();
+        d.setHeight(Math.min(d.getHeight(), screen.getHeight()));
+        d.setX(Math.max(screen.getMinX(), Math.min(owner.getX() + (owner.getWidth() - d.getWidth()) / 2, screen.getMaxX() - d.getWidth())));
+        d.setY(Math.max(screen.getMinY(), Math.min(owner.getY() + (owner.getHeight() - d.getHeight()) / 2, screen.getMaxY() - d.getHeight())));
+    }
+
+    /** A window with <code>title</code> and the icon, {@link Launcher#ICON} (none if the jar has none). */
+    private static Stage window(String title) {
+        Stage s = new Stage();
+        s.setTitle(title);
+        try(InputStream icon = Launcher.class.getResourceAsStream(Launcher.ICON)) {
+            if(icon != null)
+                s.getIcons().add(new Image(icon));
+        } catch(IOException e) {
+            // no icon then
+        }
+        return s;
     }
 
     /** Open <code>url</code> in the browser; nothing if there is none. */

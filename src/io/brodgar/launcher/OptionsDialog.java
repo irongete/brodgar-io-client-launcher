@@ -1,102 +1,101 @@
 package io.brodgar.launcher;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSlider;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.UIManager;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Slider;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import javafx.util.StringConverter;
 
 /**
  * Modal dialog over the settings {@link Launcher#command} and {@link Settings#clientConfig} use, each with the
  * flag or key it sets, plus a live preview of the command. OK writes all of them to
  * <code>launcher.properties</code>; Cancel writes nothing. Fixed flags (exports, native access, Unsafe) are not
- * shown.
+ * shown. Drawn like the window, at {@link Ui#SCALE} ({@link Ui#dialog}).
  */
 final class OptionsDialog {
     private OptionsDialog() {}
 
     /** Heap slider: <code>MIN_GB</code> to <code>max(MIN_GB + 1, min(CAP_GB, totalGb / 2))</code>. */
     static final int MIN_GB = 1, CAP_GB = 16;
+    /** Width of a help line, at 1; longer ones wrap. */
+    private static final int HELP_WIDTH = 600;
 
-    /** Show modally; returns on close. <code>java</code> is the executable the preview starts with. No owner: the
-     *  main window is JavaFX, which Swing's modality does not reach ({@link Ui#swingDialog}). */
-    static void show(JFrame owner, Settings settings, Path java) {
-        JDialog d = new JDialog(owner, "Options", true);
-        d.setIconImage(Launcher.icon());
-
+    /** Show modally over <code>owner</code>, on the JavaFX thread; returns on close. <code>java</code> is the
+     *  executable the preview starts with. */
+    static void show(Stage owner, Settings settings, Path java) {
         long totalGb = totalMemoryGb();
-        JSlider heap = heapSlider(settings.heap(), totalGb);
-        JPanel heapRow = heapRow(heap);
-        JCheckBox pretouch = new JCheckBox("Reserve it all at start", settings.pretouch());
-        JComboBox<String> gc = new JComboBox<>(new String[] {"Concurrent (ZGC): frees memory while the game keeps running",
-                                                              "Standard (G1): frees memory in short stops"});
-        gc.setSelectedIndex(settings.gc().equals("g1") ? 1 : 0);
-        JCheckBox uiScale = new JCheckBox("Let Windows scale the game window", settings.uiScale());
-        JComboBox<String> ipv6 = new JComboBox<>(new String[] {"As Windows prefers", "IPv4 first", "IPv6 first"});
-        ipv6.setSelectedIndex(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
-        JCheckBox pack = new JCheckBox("Download the brodgar.io resource pack", settings.resourcePack());
-        JCheckBox proxy = new JCheckBox("Use brodgar.io resource cache", settings.resourceProxy());
-        JCheckBox sqlite = new JCheckBox("Use the SQLite store", settings.store().equals("sqlite"));
-        JTextField opts = new JTextField(settings.javaOptsText(), 30);
-        JTextField proxyUrl = new JTextField(settings.resourceProxyUrl(), 30);
-        proxyUrl.setEnabled(proxy.isSelected());
-        proxy.addActionListener(ev -> proxyUrl.setEnabled(proxy.isSelected()));
-        JCheckBox addonsOverride = new JCheckBox("Override addons folder", settings.addonsOverride());
-        JTextField addonsDir = new JTextField(settings.addonsDir(), 30);
-        addonsDir.setEnabled(addonsOverride.isSelected());
-        addonsOverride.addActionListener(ev -> addonsDir.setEnabled(addonsOverride.isSelected()));
-        JCheckBox savedataOverride = new JCheckBox("Override savedata folder", settings.savedataOverride());
-        JTextField savedataDir = new JTextField(settings.savedataDir(), 30);
-        savedataDir.setEnabled(savedataOverride.isSelected());
-        savedataOverride.addActionListener(ev -> savedataDir.setEnabled(savedataOverride.isSelected()));
-        JCheckBox updates = new JCheckBox("Look for a newer launcher and game when the launcher opens", settings.checkUpdates());
+        Slider heap = heapSlider(settings.heap(), totalGb);
+        HBox heapRow = heapRow(heap);
+        CheckBox pretouch = new CheckBox("Reserve it all at start");
+        pretouch.setSelected(settings.pretouch());
+        ComboBox<String> gc = new ComboBox<>();
+        gc.getItems().addAll("Concurrent (ZGC): frees memory while the game keeps running",
+                             "Standard (G1): frees memory in short stops");
+        gc.getSelectionModel().select(settings.gc().equals("g1") ? 1 : 0);
+        CheckBox uiScale = new CheckBox("Let Windows scale the game window");
+        uiScale.setSelected(settings.uiScale());
+        ComboBox<String> ipv6 = new ComboBox<>();
+        ipv6.getItems().addAll("As Windows prefers", "IPv4 first", "IPv6 first");
+        ipv6.getSelectionModel().select(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
+        CheckBox pack = new CheckBox("Download the brodgar.io resource pack");
+        pack.setSelected(settings.resourcePack());
+        CheckBox proxy = new CheckBox("Use brodgar.io resource cache");
+        proxy.setSelected(settings.resourceProxy());
+        CheckBox sqlite = new CheckBox("Use the SQLite store");
+        sqlite.setSelected(settings.store().equals("sqlite"));
+        TextField opts = new TextField(settings.javaOptsText());
+        TextField proxyUrl = new TextField(settings.resourceProxyUrl());
+        proxyUrl.disableProperty().bind(proxy.selectedProperty().not());
+        CheckBox addonsOverride = new CheckBox("Override addons folder");
+        addonsOverride.setSelected(settings.addonsOverride());
+        TextField addonsDir = new TextField(settings.addonsDir());
+        addonsDir.disableProperty().bind(addonsOverride.selectedProperty().not());
+        CheckBox savedataOverride = new CheckBox("Override savedata folder");
+        savedataOverride.setSelected(settings.savedataOverride());
+        TextField savedataDir = new TextField(settings.savedataDir());
+        savedataDir.disableProperty().bind(savedataOverride.selectedProperty().not());
+        CheckBox updates = new CheckBox("Look for a newer launcher and game when the launcher opens");
+        updates.setSelected(settings.checkUpdates());
 
-        JTextArea preview = new JTextArea(5, 64);
+        TextArea preview = new TextArea();
         preview.setEditable(false);
-        preview.setLineWrap(true);
-        preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(10, preview.getFont().getSize() - 2)));
+        preview.setWrapText(true);
+        preview.setPrefRowCount(4);
+        preview.setStyle("-fx-font-family: Monospaced; -fx-font-size: 0.83em;");
 
         Runnable refresh = () -> {
-            Settings.Launch l = new Settings.Launch(heap.getValue() + "g", pretouch.isSelected(),
-                (gc.getSelectedIndex() == 1) ? "g1" : "zgc", uiScale.isSelected(),
-                switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; },
+            Settings.Launch l = new Settings.Launch(gb(heap) + "g", pretouch.isSelected(),
+                (gc.getSelectionModel().getSelectedIndex() == 1) ? "g1" : "zgc", uiScale.isSelected(),
+                switch(ipv6.getSelectionModel().getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; },
                 sqlite.isSelected() ? "sqlite" : "files", Settings.split(opts.getText()));
             preview.setText(String.join(" ", Launcher.command(java, l)));
-            preview.setCaretPosition(0);
+            preview.positionCaret(0);
         };
-        onChange(opts, refresh);
-        heap.addChangeListener(ev -> refresh.run());
-        pretouch.addActionListener(ev -> refresh.run());
-        gc.addActionListener(ev -> refresh.run());
-        uiScale.addActionListener(ev -> refresh.run());
-        ipv6.addActionListener(ev -> refresh.run());
-        sqlite.addActionListener(ev -> refresh.run());
+        opts.textProperty().addListener((o, was, is) -> refresh.run());
+        heap.valueProperty().addListener((o, was, is) -> refresh.run());
+        pretouch.setOnAction(ev -> refresh.run());
+        gc.setOnAction(ev -> refresh.run());
+        uiScale.setOnAction(ev -> refresh.run());
+        ipv6.setOnAction(ev -> refresh.run());
+        sqlite.setOnAction(ev -> refresh.run());
         refresh.run();
 
-        JPanel form = new JPanel(new GridBagLayout());
-        Row r = new Row(form);
+        Rows r = new Rows();
         r.add("Game memory", heapRow,
               "-Xms/-Xmx" + ((totalGb > 0) ? " (installed: " + totalGb + " GB)" : ""));
         r.add(null, pretouch,
@@ -123,16 +122,28 @@ final class OptionsDialog {
               "haven.savedatadir in client/haven-config.properties; off: client/savedata");
         r.add(null, updates,
               "check.updates: GitHub release lookup for the launcher and the client at start");
-        r.preview("The game will be started as:", new JScrollPane(preview));
+        r.preview("The game will be started as:", preview);
 
-        JButton ok = new JButton("OK");
-        JButton cancel = new JButton("Cancel");
-        ok.addActionListener(ev -> {
-            settings.set("heap", heap.getValue() + "g");
+        Button ok = new Button("OK");
+        ok.setDefaultButton(true);
+        Button cancel = new Button("Cancel");
+        cancel.setCancelButton(true);
+        // the form scrolls on a screen too short for the dialog (Ui.place), and nowhere else
+        ScrollPane scroll = new ScrollPane(r.form);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setFocusTraversable(false);
+        scroll.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+        VBox root = new VBox(scroll, buttons(ok, cancel));
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        root.setPadding(new Insets(12 * Ui.SCALE, 16 * Ui.SCALE, 12 * Ui.SCALE, 16 * Ui.SCALE));
+        Stage d = Ui.dialog(owner, "Options", root);
+        ok.setOnAction(ev -> {
+            settings.set("heap", gb(heap) + "g");
             settings.set("heap.pretouch", String.valueOf(pretouch.isSelected()));
-            settings.set("gc", (gc.getSelectedIndex() == 1) ? "g1" : "zgc");
+            settings.set("gc", (gc.getSelectionModel().getSelectedIndex() == 1) ? "g1" : "zgc");
             settings.set("ui.scale", String.valueOf(uiScale.isSelected()));
-            settings.set("ipv6", switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; });
+            settings.set("ipv6", switch(ipv6.getSelectionModel().getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; });
             settings.set("resource.pack", String.valueOf(pack.isSelected()));
             settings.set("resource.proxy", String.valueOf(proxy.isSelected()));
             settings.set("store", sqlite.isSelected() ? "sqlite" : "files");
@@ -143,63 +154,60 @@ final class OptionsDialog {
             settings.set("savedata.override", String.valueOf(savedataOverride.isSelected()));
             settings.set("savedata.dir", savedataDir.getText().trim());
             settings.set("check.updates", String.valueOf(updates.isSelected()));
-            d.dispose();
+            d.close();
         });
-        cancel.addActionListener(ev -> d.dispose());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        buttons.add(ok);
-        buttons.add(cancel);
-        buttons.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
-
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
-        panel.add(form, BorderLayout.CENTER);
-        panel.add(buttons, BorderLayout.SOUTH);
-        d.setContentPane(panel);
-        d.getRootPane().setDefaultButton(ok);
-        d.pack();
-        d.setMinimumSize(new Dimension(680, d.getHeight()));
-        d.setResizable(false);
-        d.setLocationRelativeTo(owner);
-        d.setVisible(true);
+        cancel.setOnAction(ev -> d.close());
+        d.showAndWait();
     }
 
     /** The heap slider: {@link #MIN_GB} to <code>max(MIN_GB + 1, min(CAP_GB, totalGb / 2))</code>, 8 when the
-     *  memory is unknown, at <code>heap</code>'s value clamped into that range. Also the setup's
+     *  memory is unknown, at <code>heap</code>'s value clamped into that range, a tick per GB. Also the setup's
      *  ({@link FirstRunDialog}). */
-    static JSlider heapSlider(String heap, long totalGb) {
+    static Slider heapSlider(String heap, long totalGb) {
         int maxGb = (totalGb <= 0) ? 8 : (int)Math.max(MIN_GB + 1, Math.min(CAP_GB, totalGb / 2));
-        JSlider s = new JSlider(MIN_GB, maxGb, Math.max(MIN_GB, Math.min(maxGb, heapGb(heap))));
-        int step = (maxGb - MIN_GB > 8) ? 2 : 1;             // label every GB up to 9 labels, else every 2
-        s.setMajorTickSpacing(step);
-        s.setMinorTickSpacing(1);
-        s.setLabelTable(s.createStandardLabels(step, (step == 1) ? MIN_GB : 2));   // even labels at step 2
-        s.setPaintTicks(true);
-        s.setPaintLabels(true);
+        Slider s = new Slider(MIN_GB, maxGb, Math.max(MIN_GB, Math.min(maxGb, heapGb(heap))));
+        boolean even = maxGb - MIN_GB > 8;              // label every GB up to 9 labels, else the even ones
+        s.setMajorTickUnit(1);
+        s.setMinorTickCount(0);
+        s.setBlockIncrement(1);
+        s.setShowTickMarks(true);
+        s.setShowTickLabels(true);
         s.setSnapToTicks(true);
+        s.setLabelFormatter(new StringConverter<Double>() {
+            @Override public String toString(Double gb) {
+                int n = (int)Math.round(gb);
+                return (!even || (n % 2 == 0)) ? String.valueOf(n) : "";
+            }
+            @Override public Double fromString(String s) {
+                return null;
+            }
+        });
         return s;
     }
 
     /** The slider with its value, <code>N GB</code> in bold, at its right, following it. */
-    static JPanel heapRow(JSlider heap) {
-        JLabel value = new JLabel(heap.getValue() + " GB");
-        value.setFont(value.getFont().deriveFont(Font.BOLD));
-        value.setPreferredSize(new Dimension(52, value.getPreferredSize().height));
-        heap.addChangeListener(ev -> value.setText(heap.getValue() + " GB"));
-        JPanel row = new JPanel(new BorderLayout(8, 0));
-        row.add(heap, BorderLayout.CENTER);
-        row.add(value, BorderLayout.EAST);
+    static HBox heapRow(Slider heap) {
+        Label value = new Label(gb(heap) + " GB");
+        value.setStyle("-fx-font-weight: bold;");
+        value.setMinWidth(52 * Ui.SCALE);
+        heap.valueProperty().addListener((o, was, is) -> value.setText(gb(heap) + " GB"));
+        HBox row = new HBox(8 * Ui.SCALE, heap, value);
+        row.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(heap, Priority.ALWAYS);
         return row;
     }
 
-    /** The system look and feel for a Swing window; the cross-platform one stays if it fails. Set before each
-     *  Swing dialog, since the main window is JavaFX. */
-    static void systemLookAndFeel() {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch(Exception e) {
-            // cross-platform look and feel then
-        }
+    /** The slider's value, in whole GB. */
+    static int gb(Slider heap) {
+        return (int)Math.round(heap.getValue());
+    }
+
+    /** A dialog's button row: <code>buttons</code> at the right, a space above them. */
+    static HBox buttons(Button... buttons) {
+        HBox row = new HBox(8 * Ui.SCALE, buttons);
+        row.setAlignment(Pos.CENTER_RIGHT);
+        row.setPadding(new Insets(12 * Ui.SCALE, 0, 0, 0));
+        return row;
     }
 
     /** <code>Ng</code> → N; <code>Nm</code> → ceil(N / 1024); else <code>MIN_GB</code>. */
@@ -224,73 +232,50 @@ final class OptionsDialog {
         return 0;
     }
 
-    /** GridBag rows: label (a name, or a checkbox that governs the control) + control, then a help line
+    /** Grid rows: label (a name, or a checkbox that governs the control) + control, then a help line
      *  spanning both columns. */
-    private static final class Row {
-        private final JPanel form;
-        private final GridBagConstraints c = new GridBagConstraints();
+    private static final class Rows {
+        final GridPane form = new GridPane();
         private int y = 0;
 
-        Row(JPanel form) {
-            this.form = form;
-            c.anchor = GridBagConstraints.WEST;
+        Rows() {
+            ColumnConstraints name = new ColumnConstraints(), field = new ColumnConstraints();
+            field.setHgrow(Priority.ALWAYS);
+            form.getColumnConstraints().addAll(name, field);
+            form.setHgap(8 * Ui.SCALE);
         }
 
-        void add(String name, JComponent field, String what) {
-            labelled((name == null) ? null : new JLabel(name), field, what);
+        void add(String name, Node field, String what) {
+            labelled((name == null) ? null : new Label(name), field, what);
         }
 
         /** The row with <code>label</code> in the first column: a name, or the checkbox that governs the control. */
-        void labelled(JComponent label, JComponent field, String what) {
-            c.insets = new Insets(8, 4, 0, 4);
-            c.gridy = y++;
-            c.fill = GridBagConstraints.NONE;
-            c.weightx = 0;
+        void labelled(Node label, Node field, String what) {
+            Insets above = new Insets(6 * Ui.SCALE, 0, 0, 0);
             if(label != null) {
-                c.gridx = 0;
-                c.gridwidth = 1;
-                label.setFont(label.getFont().deriveFont(Font.BOLD));
-                form.add(label, c);
-                c.gridx = 1;
+                label.setStyle("-fx-font-weight: bold;");
+                form.add(label, 0, y);
+                GridPane.setMargin(label, above);
+                form.add(field, 1, y++);
             } else {
-                c.gridx = 0;
-                c.gridwidth = 2;
-                if(field instanceof JCheckBox b)
-                    b.setFont(b.getFont().deriveFont(Font.BOLD));
+                if(field instanceof CheckBox)
+                    field.setStyle("-fx-font-weight: bold;");
+                form.add(field, 0, y++, 2, 1);
             }
-            c.fill = GridBagConstraints.HORIZONTAL;
-            c.weightx = 1;
-            form.add(field, c);
-            JLabel help = new JLabel("<html><div style='width:560px'>" + what + "</div></html>");
-            help.setFont(help.getFont().deriveFont(Font.PLAIN, Math.max(10f, help.getFont().getSize() - 1)));
-            Color fg = UIManager.getColor("Label.disabledForeground");
-            help.setForeground((fg != null) ? fg : Color.GRAY);
-            c.insets = new Insets(0, 4, 0, 4);
-            c.gridx = 0;
-            c.gridy = y++;
-            c.gridwidth = 2;
-            form.add(help, c);
+            GridPane.setMargin(field, above);
+            Label help = new Label(what);
+            help.setWrapText(true);
+            help.setPrefWidth(HELP_WIDTH * Ui.SCALE);
+            help.setStyle("-fx-font-size: 0.92em; -fx-text-fill: #6e6e6e;");
+            form.add(help, 0, y++, 2, 1);
         }
 
-        void preview(String caption, JComponent area) {
-            c.insets = new Insets(16, 4, 0, 4);
-            c.gridx = 0;
-            c.gridy = y++;
-            c.gridwidth = 2;
-            c.fill = GridBagConstraints.HORIZONTAL;
-            c.weightx = 1;
-            form.add(new JLabel(caption), c);
-            c.insets = new Insets(4, 4, 0, 4);
-            c.gridy = y++;
-            form.add(area, c);
+        void preview(String caption, Node area) {
+            Label label = new Label(caption);
+            form.add(label, 0, y++, 2, 1);
+            GridPane.setMargin(label, new Insets(16 * Ui.SCALE, 0, 0, 0));
+            form.add(area, 0, y++, 2, 1);
+            GridPane.setMargin(area, new Insets(4 * Ui.SCALE, 0, 0, 0));
         }
-    }
-
-    private static void onChange(JTextField f, Runnable r) {
-        f.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { r.run(); }
-            public void removeUpdate(DocumentEvent e) { r.run(); }
-            public void changedUpdate(DocumentEvent e) { r.run(); }
-        });
     }
 }

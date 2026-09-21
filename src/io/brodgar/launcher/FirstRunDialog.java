@@ -1,26 +1,19 @@
 package io.brodgar.launcher;
 
-import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.awt.Color;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.Frame;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.lang.reflect.InvocationTargetException;
 import java.util.List;
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JSlider;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import javax.swing.WindowConstants;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 
 /**
  * The first-start setup, before the main window: a page for each choice the launcher makes on the player's
@@ -30,10 +23,11 @@ import javax.swing.WindowConstants;
  * on the last page. Finish writes the four settings and <code>firstrun=false</code> to
  * <code>launcher.properties</code>: the launcher then opens. Closing the window quits the launcher with nothing
  * written, so the setup returns at the next start. {@link Settings#firstRun} says whether it is shown
- * ({@link Launcher#main}). The labels are the Options dialog's, so the player finds each again there.
+ * ({@link Launcher#main}). The labels are the Options dialog's, so the player finds each again there; the
+ * window is drawn like it, at {@link Ui#SCALE} ({@link Ui#dialog}).
  */
 final class FirstRunDialog {
-    /** Width of a page's text, in the HTML that wraps it. */
+    /** Width of a page's text, at 1; it wraps there. */
     private static final int TEXT_WIDTH = 520;
     /** The recommended heap is a quarter of the machine's memory, kept between these. */
     private static final int RECOMMENDED_MIN_GB = 2, RECOMMENDED_MAX_GB = 8;
@@ -50,90 +44,67 @@ final class FirstRunDialog {
         + "Export and Import in the map window carry it over. Recommended.";
 
     /** A page: its heading, its text, its control. */
-    private record Page(String heading, String text, JComponent control) {}
+    private record Page(String heading, String text, Node control) {}
 
     private final Settings settings;
-    private final JDialog dialog;
-    private final CardLayout cards = new CardLayout();
-    private final JPanel deck = new JPanel(cards);
-    private final JLabel heading = new JLabel();
-    private final JLabel step = new JLabel();
-    private final JButton back = new JButton("Back");
-    private final JButton next = new JButton("Next");
-    private final JCheckBox pack, proxy, sqlite;
-    private final JSlider heap;
+    private final Stage stage;
+    /** The pages, one visible at a time: as tall as the tallest, so no resize between pages. */
+    private final StackPane deck = new StackPane();
+    private final Label heading = new Label();
+    private final Label step = new Label();
+    private final Button back = new Button("Back");
+    private final Button next = new Button("Next");
+    private final CheckBox pack, proxy, sqlite;
+    private final Slider heap;
     private final List<Page> pages;
     private int at;
 
     private FirstRunDialog(Settings settings) {
         this.settings = settings;
-        dialog = new JDialog((Frame)null, Launcher.TITLE + " — first start", true);
-        dialog.setIconImage(Launcher.icon());
         long totalGb = OptionsDialog.totalMemoryGb();
-        pack = new JCheckBox("Download the brodgar.io resource pack", settings.resourcePack());
-        proxy = new JCheckBox("Use brodgar.io resource cache", settings.resourceProxy());
-        sqlite = new JCheckBox("Use the SQLite store", settings.store().equals("sqlite"));
+        pack = new CheckBox("Download the brodgar.io resource pack");
+        pack.setSelected(settings.resourcePack());
+        proxy = new CheckBox("Use brodgar.io resource cache");
+        proxy.setSelected(settings.resourceProxy());
+        sqlite = new CheckBox("Use the SQLite store");
+        sqlite.setSelected(settings.store().equals("sqlite"));
         heap = OptionsDialog.heapSlider(settings.heap(), totalGb);
         pages = List.of(new Page("The resource pack", PACK_TEXT, pack),
                         new Page("The resource cache", CACHE_TEXT, proxy),
                         new Page("The SQLite store", STORE_TEXT, sqlite),
-                        new Page("Game memory", memoryText(totalGb, recommendedGb(totalGb, heap.getMaximum())), OptionsDialog.heapRow(heap)));
-        for(int i = 0; i < pages.size(); i++)
-            deck.add(page(pages.get(i)), String.valueOf(i));
+                        new Page("Game memory", memoryText(totalGb, recommendedGb(totalGb, (int)heap.getMax())), OptionsDialog.heapRow(heap)));
+        deck.setAlignment(Pos.TOP_LEFT);
+        for(Page p : pages)
+            deck.getChildren().add(page(p));
 
-        heading.setFont(heading.getFont().deriveFont(Font.BOLD, heading.getFont().getSize() + 4f));
-        step.setFont(step.getFont().deriveFont(Font.PLAIN, Math.max(10f, step.getFont().getSize() - 1)));
-        Color fg = UIManager.getColor("Label.disabledForeground");
-        step.setForeground((fg != null) ? fg : Color.GRAY);
-        JPanel top = new JPanel(new BorderLayout());
-        top.add(heading, BorderLayout.WEST);
-        top.add(step, BorderLayout.EAST);
-        top.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
+        heading.setStyle("-fx-font-size: 1.33em; -fx-font-weight: bold;");
+        step.setStyle("-fx-font-size: 0.92em; -fx-text-fill: #6e6e6e;");
+        Region gap = new Region();
+        HBox.setHgrow(gap, Priority.ALWAYS);
+        HBox top = new HBox(heading, gap, step);
+        top.setAlignment(Pos.CENTER_LEFT);
+        top.setPadding(new Insets(0, 0, 12 * Ui.SCALE, 0));
 
-        back.addActionListener(ev -> go(at - 1));
-        next.addActionListener(ev -> {
+        back.setOnAction(ev -> go(at - 1));
+        next.setDefaultButton(true);
+        next.setOnAction(ev -> {
             if(at < pages.size() - 1)
                 go(at + 1);
             else
                 finish();
         });
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        buttons.add(back);
-        buttons.add(next);
-        buttons.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
 
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(16, 20, 16, 20));
-        panel.add(top, BorderLayout.NORTH);
-        panel.add(deck, BorderLayout.CENTER);
-        panel.add(buttons, BorderLayout.SOUTH);
-        dialog.setContentPane(panel);
-        dialog.getRootPane().setDefaultButton(next);
-        dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        dialog.addWindowListener(new WindowAdapter() {
-            @Override public void windowClosing(WindowEvent e) {
-                System.exit(0);                     // nothing written: the setup returns at the next start
-            }
-        });
+        VBox root = new VBox(top, deck, OptionsDialog.buttons(back, next));
+        root.setPadding(new Insets(16 * Ui.SCALE, 20 * Ui.SCALE, 16 * Ui.SCALE, 20 * Ui.SCALE));
         go(0);
-        dialog.pack();                              // the deck is as tall as its tallest page: no resize between pages
-        dialog.setResizable(false);
-        dialog.setLocationRelativeTo(null);
+        stage = Ui.dialog(null, Launcher.TITLE + " — first start", root);
+        stage.setOnCloseRequest(ev -> System.exit(0));    // nothing written: the setup returns at the next start
     }
 
-    /** Show modally on the Swing thread and return when Finish has written the settings; from any other
-     *  thread. Closing the window exits the process. */
+    /** Show modally on the JavaFX thread and return when Finish has written the settings; from any other
+     *  thread, after {@link Ui#startup}. Closing the window exits the process. */
     static void show(Settings settings) {
-        try {
-            SwingUtilities.invokeAndWait(() -> {
-                OptionsDialog.systemLookAndFeel();
-                new FirstRunDialog(settings).dialog.setVisible(true);
-            });
-        } catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch(InvocationTargetException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+        Ui.runAndWait(() -> new FirstRunDialog(settings).stage.showAndWait());
     }
 
     /** A quarter of the machine's memory, from {@link #RECOMMENDED_MIN_GB} to {@link #RECOMMENDED_MAX_GB} and
@@ -150,15 +121,14 @@ final class FirstRunDialog {
 
     /** A page's panel: the text, wrapped at {@link #TEXT_WIDTH}, and the control under it, a checkbox in bold as
      *  in Options. */
-    private static JPanel page(Page p) {
-        JLabel text = new JLabel("<html><div style='width:" + TEXT_WIDTH + "px'>" + p.text() + "</div></html>");
-        if(p.control() instanceof JCheckBox b)
-            b.setFont(b.getFont().deriveFont(Font.BOLD));
-        JPanel body = new JPanel(new BorderLayout());
-        body.add(p.control(), BorderLayout.NORTH);
-        JPanel panel = new JPanel(new BorderLayout(0, 16));
-        panel.add(text, BorderLayout.NORTH);
-        panel.add(body, BorderLayout.CENTER);
+    private static VBox page(Page p) {
+        Label text = new Label(p.text());
+        text.setWrapText(true);
+        text.setPrefWidth(TEXT_WIDTH * Ui.SCALE);
+        if(p.control() instanceof CheckBox)
+            p.control().setStyle("-fx-font-weight: bold;");
+        VBox panel = new VBox(16 * Ui.SCALE, text, p.control());
+        panel.setAlignment(Pos.TOP_LEFT);
         return panel;
     }
 
@@ -168,10 +138,11 @@ final class FirstRunDialog {
         Page p = pages.get(i);
         heading.setText(p.heading());
         step.setText((i + 1) + " of " + pages.size());
-        cards.show(deck, String.valueOf(i));
-        back.setEnabled(i > 0);
+        for(int k = 0; k < pages.size(); k++)
+            deck.getChildren().get(k).setVisible(k == i);
+        back.setDisable(i == 0);
         next.setText((i == pages.size() - 1) ? "Finish" : "Next");
-        next.requestFocusInWindow();
+        next.requestFocus();
     }
 
     /** Write the four settings and <code>firstrun=false</code>; close. */
@@ -179,8 +150,8 @@ final class FirstRunDialog {
         settings.set("resource.pack", String.valueOf(pack.isSelected()));
         settings.set("resource.proxy", String.valueOf(proxy.isSelected()));
         settings.set("store", sqlite.isSelected() ? "sqlite" : "files");
-        settings.set("heap", heap.getValue() + "g");
+        settings.set("heap", OptionsDialog.gb(heap) + "g");
         settings.set("firstrun", "false");
-        dialog.dispose();
+        stage.close();
     }
 }

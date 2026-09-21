@@ -28,10 +28,11 @@ import java.util.concurrent.TimeUnit;
  *   client.log             stdout/stderr of the last client run
  * </pre>
  *
- * <p>Start: the first-start setup while <code>firstrun</code> is on ({@link FirstRunDialog}: the resource pack,
- * the resource cache, the SQLite store and the game's memory, a page each, written on Finish), then the
- * window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped, released launchers only), {@link #update}
- * (release check, download, unpack), {@link Ui#ready} with Play or Retry, or {@link Ui#idle}. Play:
+ * <p>Start: JavaFX ({@link Ui#startup}), the first-start setup while <code>firstrun</code> is on
+ * ({@link FirstRunDialog}: the resource pack, the resource cache, the SQLite store and the game's memory, a page
+ * each, written on Finish), then the window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped,
+ * released launchers only), {@link #update} (release check, download, unpack), {@link Ui#ready} with Play or
+ * Retry, or {@link Ui#idle}. Play:
  * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
  * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written when Options
  * closes — an unpacked release restores the zip's copy), then {@link #command} runs with cwd <code>client/</code>
@@ -72,6 +73,7 @@ public final class Launcher {
             check(home, settings, client, javaw, shipped);
             return;
         }
+        Ui.startup();
         if(settings.firstRun())
             FirstRunDialog.show(settings);
         Launcher[] l = new Launcher[1];
@@ -99,9 +101,11 @@ public final class Launcher {
         new Thread(this::prepare, "launcher-update").start();
     }
 
-    /** Options button callback: the modal Swing dialog beside the window, then write the client's file. */
+    /** Options button callback, on the JavaFX thread: the modal dialog over the window, then write the client's
+     *  file. */
     private void options() {
-        ui.swingDialog(() -> OptionsDialog.show(null, settings, exe(javaw, settings)), this::configure);
+        OptionsDialog.show(ui.stage(), settings, exe(javaw, settings));
+        configure();
     }
 
     /** {@link ClientInstall#configure} from the settings; an <code>IOException</code> goes to the status line. */
@@ -435,7 +439,8 @@ public final class Launcher {
      *  is the blue one), <code>etc/icon.png</code> out of the client's <code>tools/icon.py --style parchment</code>. */
     static final String ICON = "icon.png";
 
-    /** {@link #ICON} for a Swing window; null if the jar has none. */
+    /** {@link #ICON} for the updater's Swing window ({@link Updater}; the JavaFX windows load it themselves,
+     *  {@link Ui}); null if the jar has none. */
     static java.awt.Image icon() {
         try(java.io.InputStream icon = Launcher.class.getResourceAsStream(ICON)) {
             return (icon == null) ? null : javax.imageio.ImageIO.read(icon);
