@@ -54,9 +54,9 @@ public final class Settings {
         resource.url=https://game.havenandhearth.com/res/
         resource.proxy.url=https://res.brodgar.io/
 
-        # the brodgar.io resource pack, client/brodgar-res.jar: every resource from the first start. With
-        # resource.proxy on: downloaded when missing, renewed when the server's is newer and the installed one is
-        # older than resource.pack.renew.days (0: whenever the server's is newer)
+        # the brodgar.io resource pack, client/brodgar-res.jar: every resource from the first start; downloaded
+        # when missing, renewed when the server's is newer and the installed one is older than
+        # resource.pack.renew.days (0: whenever the server's is newer)
         resource.pack=true
         resource.pack.url=https://brodgar.io/res/?jar
         resource.pack.renew.days=30
@@ -175,11 +175,6 @@ public final class Settings {
     static List<String> split(String opts) {
         String v = (opts == null) ? "" : opts.trim();
         return v.isEmpty() ? List.of() : Arrays.asList(v.split("\\s+"));
-    }
-
-    /** Write <code>resource.proxy</code>. */
-    void resourceProxy(boolean on) {
-        set("resource.proxy", String.valueOf(on));
     }
 
     /** Write <code>console</code>. */

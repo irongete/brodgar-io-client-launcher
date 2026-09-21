@@ -36,9 +36,9 @@ import javax.swing.UIManager;
 /**
  * The main window, in JavaFX (the trailer is JavaFX Media, and a Swing window would copy every frame out of the
  * GPU). Rows: the trailer ({@link Trailer}) and its YouTube link; then a grid: status; progress bar and console
- * checkbox with the main button (Play / Retry / disabled) beside them, spanning both; proxy checkbox; Options
- * and Open client folder, with the channel dropdown at the right. The console checkbox writes <code>settings</code> directly; the proxy checkbox goes through
- * <code>onProxy</code> (it also writes the client's file). All methods are thread-safe
+ * checkbox with the main button (Play / Retry / disabled) beside them, spanning both; Options and Open
+ * client folder, with the channel dropdown at the right. The console checkbox writes <code>settings</code>
+ * directly. All methods are thread-safe
  * (<code>Platform.runLater</code>); the main button's action runs on a thread of its own. The dropdown is
  * disabled while work runs. Full screen (a double click on the trailer) fills the screen with the trailer
  * alone, on black; Esc brings the window back.
@@ -64,11 +64,10 @@ final class Ui {
     private final ProgressBar bar;
     private final Button button;
     private final CheckBox console;
-    private final CheckBox proxy;
     private final ComboBox<Channel> channel;
     private volatile Runnable action;
 
-    private Ui(String title, Settings settings, Path trailerDir, Consumer<Channel> onChannel, Consumer<Boolean> onProxy, Runnable onOptions, Runnable onClientFolder) {
+    private Ui(String title, Settings settings, Path trailerDir, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
         stage = new Stage();
         stage.setTitle(title);
         try(InputStream icon = Launcher.class.getResourceAsStream(Launcher.ICON)) {
@@ -109,9 +108,6 @@ final class Ui {
         console.setSelected(settings.console());
         console.setTooltip(new Tooltip("The client runs in a command window that shows what it prints and stays open when it ends in an error"));
         console.setOnAction(ev -> settings.console(console.isSelected()));
-        proxy = new CheckBox("Use brodgar.io resource cache proxy");
-        proxy.setSelected(settings.resourceProxy());
-        proxy.setOnAction(ev -> onProxy.accept(proxy.isSelected()));
         channel = new ComboBox<>();
         channel.getItems().addAll(Channel.values());
         channel.setConverter(new StringConverter<Channel>() {
@@ -146,15 +142,13 @@ final class Ui {
         // rows 1-2, column 2: main button
         controls.add(button, 2, 1, 1, 2);
         GridPane.setMargin(button, new Insets(0, 0, 0, column));
-        // row 3, columns 0-1: proxy checkbox
-        controls.add(proxy, 0, 3, 2, 1);
-        // row 4: Options and Open client folder; channel at the right
+        // row 3: Options and Open client folder; channel at the right
         HBox buttons = new HBox(gap, options, folder);
-        controls.add(buttons, 0, 4, 2, 1);
+        controls.add(buttons, 0, 3, 2, 1);
         GridPane.setMargin(buttons, new Insets(gap, 0, 0, 0));
         HBox pick = new HBox(6 * SCALE, new Label("Channel:"), channel);
         pick.setAlignment(Pos.CENTER_RIGHT);
-        controls.add(pick, 2, 4);
+        controls.add(pick, 2, 3);
         GridPane.setHalignment(pick, HPos.RIGHT);
         GridPane.setMargin(pick, new Insets(gap, 0, 0, column));
 
@@ -184,13 +178,13 @@ final class Ui {
     /** Build and show the window on the JavaFX thread, starting JavaFX; controls start from
      *  <code>settings</code>, the trailer's files are in <code>trailerDir</code>. The callbacks run on the JavaFX
      *  thread. */
-    static Ui open(String title, Settings settings, Path trailerDir, Consumer<Channel> onChannel, Consumer<Boolean> onProxy, Runnable onOptions, Runnable onClientFolder) {
+    static Ui open(String title, Settings settings, Path trailerDir, Consumer<Channel> onChannel, Runnable onOptions, Runnable onClientFolder) {
         Ui[] out = new Ui[1];
         RuntimeException[] failed = new RuntimeException[1];
         CountDownLatch built = new CountDownLatch(1);
         Platform.startup(() -> {
             try {
-                out[0] = new Ui(title, settings, trailerDir, onChannel, onProxy, onOptions, onClientFolder);
+                out[0] = new Ui(title, settings, trailerDir, onChannel, onOptions, onClientFolder);
             } catch(RuntimeException e) {
                 failed[0] = e;
             } finally {

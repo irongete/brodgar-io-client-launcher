@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Start: window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped, released launchers only), {@link #update}
  * (release check, download, unpack), {@link Ui#ready} with Play or Retry, or {@link Ui#idle}. Play:
  * {@link ClientInstall#configure} writes the client's <code>haven-config.properties</code> from the settings
- * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written on the proxy checkbox and when Options
+ * (<code>haven.resurl</code>, <code>haven.addondir</code>; also written when Options
  * closes — an unpacked release restores the zip's copy), then {@link #command} runs with cwd <code>client/</code>
  * and the launcher stays, Play offered again 3 s later: as many clients as wanted. <code>--check</code>:
  * resolve and print, no window, no writes.
@@ -72,7 +72,7 @@ public final class Launcher {
         }
         Launcher[] l = new Launcher[1];
         Path jar = jar();
-        Ui ui = Ui.open(TITLE, settings, ((jar != null) ? jar.getParent() : home).resolve(Trailer.DIR), c -> l[0].channel(c), on -> l[0].proxy(on), () -> l[0].options(), () -> l[0].clientFolder());
+        Ui ui = Ui.open(TITLE, settings, ((jar != null) ? jar.getParent() : home).resolve(Trailer.DIR), c -> l[0].channel(c), () -> l[0].options(), () -> l[0].clientFolder());
         l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
@@ -93,12 +93,6 @@ public final class Launcher {
     private void channel(Channel c) {
         settings.channel(c);
         new Thread(this::prepare, "launcher-update").start();
-    }
-
-    /** Proxy checkbox callback: save, write the client's file. */
-    private void proxy(boolean on) {
-        settings.resourceProxy(on);
-        configure();
     }
 
     /** Options button callback: the modal Swing dialog beside the window, then write the client's file. */
@@ -147,12 +141,12 @@ public final class Launcher {
         }
     }
 
-    /** The resource pack ({@link ResourcePack}), when <code>resource.pack</code> and the proxy are on: a
+    /** The resource pack ({@link ResourcePack}), when <code>resource.pack</code> is on: a
      *  download the first time (~250 MB, the status line says so), a conditional check after the renewal
      *  period, nothing in between. Never in the way of Play: the client runs without it, and a failed
      *  download leaves the installed one. */
     private void pack() {
-        if(!settings.resourcePack() || !settings.resourceProxy())
+        if(!settings.resourcePack())
             return;
         boolean first = !Files.exists(client.dir().resolve(ResourcePack.JAR));
         try {
@@ -410,7 +404,7 @@ public final class Launcher {
             System.out.println("newest:    unreachable: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + settings.resourceProxyUrl() : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
-        System.out.println("pack:      " + (!settings.resourcePack() ? "off" : !settings.resourceProxy() ? "on, but the proxy is off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
+        System.out.println("pack:      " + (!settings.resourcePack() ? "off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
         System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
         System.out.println("command:   " + String.join(" ", command(javaw, settings)));

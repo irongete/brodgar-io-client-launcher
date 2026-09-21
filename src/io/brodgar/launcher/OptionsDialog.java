@@ -69,9 +69,13 @@ final class OptionsDialog {
         JCheckBox uiScale = new JCheckBox("Let Windows scale the game window", settings.uiScale());
         JComboBox<String> ipv6 = new JComboBox<>(new String[] {"As Windows prefers", "IPv4 first", "IPv6 first"});
         ipv6.setSelectedIndex(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
+        JCheckBox pack = new JCheckBox("Download the brodgar.io resource pack", settings.resourcePack());
+        JCheckBox proxy = new JCheckBox("Use brodgar.io resource cache", settings.resourceProxy());
         JCheckBox sqlite = new JCheckBox("Use the SQLite store", settings.store().equals("sqlite"));
         JTextField opts = new JTextField(settings.javaOptsText(), 30);
         JTextField proxyUrl = new JTextField(settings.resourceProxyUrl(), 30);
+        proxyUrl.setEnabled(proxy.isSelected());
+        proxy.addActionListener(ev -> proxyUrl.setEnabled(proxy.isSelected()));
         JCheckBox addonsOverride = new JCheckBox("Override addons folder", settings.addonsOverride());
         JTextField addonsDir = new JTextField(settings.addonsDir(), 30);
         addonsDir.setEnabled(addonsOverride.isSelected());
@@ -117,12 +121,16 @@ final class OptionsDialog {
               "Off: -Dsun.java2d.uiScale.enabled=false");
         r.add("Network addresses", ipv6,
               "-Djava.net.preferIPv6Addresses=system|false|true");
+        r.add(null, pack,
+              "Download every game resource in one pack (about 250 MB, once) instead of one by one as the game needs them");
+        r.add(null, proxy,
+              "Fetch the resource files from the brodgar.io cache instead of the Haven server: about x2.5 faster");
         r.add(null, sqlite,
-              "-Dhaven.store=sqlite: the map and the resource cache in client/savedata/map.sqlite and rescache.sqlite; off: %APPDATA%\\Haven and Hearth\\data. Each store keeps its own data");
+              "Keep the map and the resource files in SQLite: map reads about x10 faster");
         r.add("Extra Java options", opts,
               "Appended to the JVM command line, space-separated");
         r.add("Resource cache address", proxyUrl,
-              "haven.resurl in client/haven-config.properties while the proxy checkbox is on");
+              "haven.resurl in client/haven-config.properties while the resource cache is on");
         r.labelled(addonsOverride, addonsDir,
               "haven.addondir in client/haven-config.properties; off: client/addons");
         r.labelled(savedataOverride, savedataDir,
@@ -139,6 +147,8 @@ final class OptionsDialog {
             settings.set("gc", (gc.getSelectedIndex() == 1) ? "g1" : "zgc");
             settings.set("ui.scale", String.valueOf(uiScale.isSelected()));
             settings.set("ipv6", switch(ipv6.getSelectedIndex()) { case 1 -> "false"; case 2 -> "true"; default -> "system"; });
+            settings.set("resource.pack", String.valueOf(pack.isSelected()));
+            settings.set("resource.proxy", String.valueOf(proxy.isSelected()));
             settings.set("store", sqlite.isSelected() ? "sqlite" : "files");
             settings.set("java.opts", opts.getText().trim());
             settings.set("resource.proxy.url", proxyUrl.getText().trim());

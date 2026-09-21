@@ -5,11 +5,12 @@ Windows only; it brings its own Java.
 
 - **Installs the client** and keeps it at the newest release, on the **Release** or the **Beta** channel.
 - **Updates itself** the same way.
-- **Fetches the game's resources from brodgar.io** (the checkbox): its resource cache answers in a
-  fraction of the official server's time, and the **resource pack**, `client/brodgar-res.jar`, holds
-  every resource from the first start (one download of about 250 MB; renewed at most monthly, and
-  only when there is something new). What the pack has not got, the client fetches as it goes.
-  `launcher.properties`: `resource.pack`, `resource.pack.url`, `resource.pack.renew.days`.
+- **Fetches the game's resources from brodgar.io** (two checkboxes in **Options...**): the **resource
+  pack**, `client/brodgar-res.jar`, holds every resource from the first start (one download of about
+  250 MB; renewed at most monthly, and only when there is something new), and the **resource cache**
+  answers what the pack has not got in a fraction of the official server's time.
+  `launcher.properties`: `resource.pack`, `resource.pack.url`, `resource.pack.renew.days`,
+  `resource.proxy`, `resource.proxy.url`.
 - **Starts the game** with the memory and Java options you set in **Options...**.
 
 ## How to use
