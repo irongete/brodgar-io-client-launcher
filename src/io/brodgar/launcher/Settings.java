@@ -72,6 +72,10 @@ public final class Settings {
         savedata.override=false
         savedata.dir=
 
+        # the client's window icon: brodgar, the blue brodgar.io dolmen (the client's own default, line
+        # removed), or original, the Haven & Hearth one (haven.icon in client/haven-config.properties)
+        icon=brodgar
+
         # false: no release lookup for the launcher or the client
         check.updates=true
 
@@ -139,6 +143,7 @@ public final class Settings {
     String addonsDir()        {return get("addons.dir", "");}
     boolean savedataOverride() {return "true".equalsIgnoreCase(get("savedata.override", "false"));}
     String savedataDir()      {return get("savedata.dir", "");}
+    String icon()             {return "original".equalsIgnoreCase(get("icon", "brodgar")) ? "original" : "brodgar";}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
     boolean firstRun()        {return !"false".equalsIgnoreCase(get("firstrun", "true"));}
 
@@ -154,19 +159,21 @@ public final class Settings {
                   List<String> opts, String resourceCacheUrl) {}
 
     /** Lines the launcher owns in <code>client/haven-config.properties</code>, in write order:
-     *  <code>haven.resurl</code>, <code>haven.addondir</code>, <code>haven.savedatadir</code>. A null value
-     *  means the line is removed: an override that is off, or on with no folder. */
+     *  <code>haven.resurl</code>, <code>haven.addondir</code>, <code>haven.savedatadir</code>,
+     *  <code>haven.icon</code>. A null value means the line is removed: an override that is off, or on with no
+     *  folder, or the icon the client picks by itself. */
     Map<String, String> clientConfig() {
         return clientConfig(resourceProxy(), resourceUrl(), RESOURCE_PROXY_URL,
-                            addonsOverride() ? addonsDir() : "", savedataOverride() ? savedataDir() : "");
+                            addonsOverride() ? addonsDir() : "", savedataOverride() ? savedataDir() : "", icon());
     }
 
     /** {@link #clientConfig()} from explicit values; a blank folder is no override. */
-    static Map<String, String> clientConfig(boolean proxy, String url, String proxyUrl, String addonsDir, String savedataDir) {
+    static Map<String, String> clientConfig(boolean proxy, String url, String proxyUrl, String addonsDir, String savedataDir, String icon) {
         Map<String, String> m = new LinkedHashMap<>();
         m.put("haven.resurl", proxy ? proxyUrl : url);
         m.put("haven.addondir", addonsDir.isBlank() ? null : addonsDir.trim());
         m.put("haven.savedatadir", savedataDir.isBlank() ? null : savedataDir.trim());
+        m.put("haven.icon", "original".equals(icon) ? "original" : null);
         return m;
     }
 

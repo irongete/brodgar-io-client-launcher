@@ -53,11 +53,12 @@
   </target>
 
   <!-- The version travels in the manifest: the window title reads it back as Implementation-Version. The window
-       icon rides in the jar beside the classes; media/ goes beside the jar, where the launcher looks for it. -->
+       icon rides in the jar beside the classes, and so do the two game icons Options shows; media/ goes beside
+       the jar, where the launcher looks for it. -->
   <target name="jar" depends="compile">
     <jar destfile="build/launcher.jar">
       <fileset dir="build/classes" />
-      <zipfileset dir="etc" includes="icon.png" prefix="io/brodgar/launcher" />
+      <zipfileset dir="etc" includes="icon.png icon-client.png icon-client-original.png" prefix="io/brodgar/launcher" />
       <manifest>
         <attribute name="Main-Class" value="${main.class}" />
         <attribute name="Implementation-Title" value="brodgar.io launcher" />

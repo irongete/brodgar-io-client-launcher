@@ -1,5 +1,7 @@
 package io.brodgar.launcher;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import javafx.geometry.Insets;
@@ -9,10 +11,13 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -34,6 +39,12 @@ final class OptionsDialog {
     static final int MIN_GB = 1, CAP_GB = 16;
     /** Width of a help line, at 1; longer ones wrap. */
     private static final int HELP_WIDTH = 600;
+    /** The game icons the client ships, in the jar beside the classes ({@link Launcher#ICON}), in the order
+     *  the <em>Game icon</em> dropdown lists them: copies of the client's <code>etc/icon.png</code> and
+     *  <code>etc/icon-original.png</code>, shown beside each choice. */
+    private static final String[] GAME_ICONS = {"icon-client.png", "icon-client-original.png"};
+    /** Height of a game icon in the dropdown, at 1. */
+    private static final int GAME_ICON_SIZE = 20;
 
     /** Show modally over <code>owner</code>, on the JavaFX thread; returns on close. <code>java</code> is the
      *  executable the preview starts with. */
@@ -69,6 +80,12 @@ final class OptionsDialog {
         savedataDir.disableProperty().bind(savedataOverride.selectedProperty().not());
         CheckBox updates = new CheckBox("Look for a newer launcher and game when the launcher opens");
         updates.setSelected(settings.checkUpdates());
+        ComboBox<String> icon = new ComboBox<>();
+        icon.getItems().addAll("The brodgar.io dolmen, in blue", "The original Haven & Hearth icon");
+        icon.getSelectionModel().select(settings.icon().equals("original") ? 1 : 0);
+        Image[] icons = gameIcons();
+        icon.setCellFactory(list -> iconCell(icon, icons));
+        icon.setButtonCell(iconCell(icon, icons));
 
         TextArea preview = new TextArea();
         preview.setEditable(false);
@@ -120,6 +137,8 @@ final class OptionsDialog {
               "haven.savedatadir in client/haven-config.properties; off: client/savedata");
         r.add(null, updates,
               "check.updates: GitHub release lookup for the launcher and the client at start");
+        r.add("Game icon", icon,
+              "haven.icon in client/haven-config.properties: the icon of the game window, in its title bar and in the taskbar");
         r.preview("The game will be started as:", preview);
 
         Button ok = new Button("OK");
@@ -151,6 +170,7 @@ final class OptionsDialog {
             settings.set("savedata.override", String.valueOf(savedataOverride.isSelected()));
             settings.set("savedata.dir", savedataDir.getText().trim());
             settings.set("check.updates", String.valueOf(updates.isSelected()));
+            settings.set("icon", (icon.getSelectionModel().getSelectedIndex() == 1) ? "original" : "brodgar");
             d.close();
         });
         cancel.setOnAction(ev -> d.close());
@@ -197,6 +217,42 @@ final class OptionsDialog {
     /** The slider's value, in whole GB. */
     static int gb(Slider heap) {
         return (int)Math.round(heap.getValue());
+    }
+
+    /** {@link #GAME_ICONS} as images, in that order; an entry is null when the jar has not got it. */
+    private static Image[] gameIcons() {
+        Image[] images = new Image[GAME_ICONS.length];
+        for(int i = 0; i < images.length; i++) {
+            try(InputStream in = Launcher.class.getResourceAsStream(GAME_ICONS[i])) {
+                images[i] = (in == null) ? null : new Image(in);
+            } catch(IOException e) {
+                // no icon then
+            }
+        }
+        return images;
+    }
+
+    /** A dropdown cell drawing <code>images</code>[the item's place in <code>box</code>] before the text; the
+     *  cell of the closed dropdown is one of these too, and it is not in the list, so the place is looked up by
+     *  the item rather than taken from the index. */
+    private static ListCell<String> iconCell(ComboBox<String> box, Image[] images) {
+        return new ListCell<>() {
+            private final ImageView view = new ImageView();
+            {
+                view.setFitHeight(GAME_ICON_SIZE * Ui.SCALE);
+                view.setPreserveRatio(true);
+                view.setSmooth(true);
+            }
+
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                int at = (item == null) ? -1 : box.getItems().indexOf(item);
+                Image image = ((at < 0) || (at >= images.length)) ? null : images[at];
+                view.setImage(image);
+                setGraphic((image == null) ? null : view);
+            }
+        };
     }
 
     /** A dialog's button row: <code>buttons</code> at the right, a space above them. */
