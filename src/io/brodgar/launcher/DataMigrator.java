@@ -93,6 +93,8 @@ final class DataMigrator {
             return;
         Path source = oldCacheDir();
         Path dir = savedataDir.isBlank() ? clientDir.resolve("savedata") : clientDir.resolve(savedataDir.trim());
+        Label title = new Label("Migrating map data to Portable client format.");
+        title.setWrapText(true);
         Label status = new Label("Scanning " + source + "…");
         status.setWrapText(true);
         ProgressBar bar = new ProgressBar(ProgressBar.INDETERMINATE_PROGRESS);
@@ -104,7 +106,7 @@ final class DataMigrator {
         copy.setManaged(false);
         Button close = new Button("Close");
         close.setCancelButton(true);
-        VBox root = new VBox(8 * Ui.SCALE, status, bar, worlds, OptionsDialog.buttons(copy, close));
+        VBox root = new VBox(8 * Ui.SCALE, title, status, bar, worlds, OptionsDialog.buttons(copy, close));
         root.setAlignment(Pos.TOP_LEFT);
         root.setPadding(new Insets(12 * Ui.SCALE, 16 * Ui.SCALE, 12 * Ui.SCALE, 16 * Ui.SCALE));   // Ui.dialog sets the style: no padding there
         root.setPrefWidth(440 * Ui.SCALE);
