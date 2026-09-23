@@ -17,7 +17,7 @@ import javafx.stage.Stage;
 
 /**
  * The first-start setup, before the main window: a page for each choice the launcher makes on the player's
- * behalf — the resource pack, the resource cache, the SQLite store, the game's memory — with what it buys in two
+ * behalf — the resource pack, the resource cache, the portable client, the game's memory — with what it buys in two
  * or three plain sentences ending in the recommendation ({@link #recommendedGb} for the memory) above its control,
  * which starts at the setting's current value; Back and Next, Finish
  * on the last page. Finish writes the four settings and <code>firstrun=false</code> to
@@ -39,9 +39,9 @@ final class FirstRunDialog {
         "What the resource pack does not have yet comes from the game's server, which is slow from far away. The "
         + "brodgar.io cache serves the same files x2.5 faster. Recommended.";
     private static final String STORE_TEXT =
-        "The map you explore is saved on your disk. The SQLite store keeps it in one file beside the client: "
-        + "x10 faster, and easy to back up or move. A map recorded by another client stays there; "
-        + "Export and Import in the map window carry it over. Recommended.";
+        "The map you explore is saved on your disk. Portable client keeps it in one SQLite file beside the client: "
+        + "x10 faster, and easy to back up or move. The map you already have in the game's cache can be "
+        + "imported. Recommended.";
 
     /** A page: its heading, its text, its control. */
     private record Page(String heading, String text, Node control) {}
@@ -54,7 +54,7 @@ final class FirstRunDialog {
     private final Label step = new Label();
     private final Button back = new Button("Back");
     private final Button next = new Button("Next");
-    private final CheckBox pack, proxy, sqlite;
+    private final CheckBox pack, proxy, sqlite, importMap;
     private final Slider heap;
     private final List<Page> pages;
     private int at;
@@ -66,12 +66,19 @@ final class FirstRunDialog {
         pack.setSelected(settings.resourcePack());
         proxy = new CheckBox("Use brodgar.io resource cache");
         proxy.setSelected(settings.resourceProxy());
-        sqlite = new CheckBox("Use the SQLite store");
+        sqlite = new CheckBox("Portable client");
         sqlite.setSelected(settings.store().equals("sqlite"));
+        importMap = new CheckBox("Import the map and the minimap icons from the cache");
+        importMap.setSelected(DataMigrator.hasCache());
+        importMap.disableProperty().bind(sqlite.selectedProperty().not());
+        importMap.setVisible(DataMigrator.hasCache());     // no cache, nothing to import
+        importMap.setManaged(importMap.isVisible());
+        sqlite.setStyle("-fx-font-weight: bold;");
+        VBox store = new VBox(8 * Ui.SCALE, sqlite, importMap);
         heap = OptionsDialog.heapSlider(settings.heap(), totalGb);
         pages = List.of(new Page("The resource pack", PACK_TEXT, pack),
                         new Page("The resource cache", CACHE_TEXT, proxy),
-                        new Page("The SQLite store", STORE_TEXT, sqlite),
+                        new Page("Portable client", STORE_TEXT, store),
                         new Page("Game memory", memoryText(totalGb, recommendedGb(totalGb, (int)heap.getMax())), OptionsDialog.heapRow(heap)));
         deck.setAlignment(Pos.TOP_LEFT);
         for(Page p : pages)
@@ -145,11 +152,12 @@ final class FirstRunDialog {
         next.requestFocus();
     }
 
-    /** Write the four settings and <code>firstrun=false</code>; close. */
+    /** Write the four settings, the import the portable client page asked for, and <code>firstrun=false</code>; close. */
     private void finish() {
         settings.set("resource.pack", String.valueOf(pack.isSelected()));
         settings.set("resource.proxy", String.valueOf(proxy.isSelected()));
         settings.set("store", sqlite.isSelected() ? "sqlite" : "files");
+        settings.set("store.import", String.valueOf(sqlite.isSelected() && importMap.isSelected()));
         settings.set("heap", OptionsDialog.gb(heap) + "g");
         settings.set("firstrun", "false");
         stage.close();

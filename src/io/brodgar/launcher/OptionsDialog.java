@@ -67,7 +67,7 @@ final class OptionsDialog {
         pack.setSelected(settings.resourcePack());
         CheckBox proxy = new CheckBox("Use brodgar.io resource cache");
         proxy.setSelected(settings.resourceProxy());
-        CheckBox sqlite = new CheckBox("Use the SQLite store");
+        CheckBox sqlite = new CheckBox("Portable client");
         sqlite.setSelected(settings.store().equals("sqlite"));
         TextField opts = new TextField(settings.javaOptsText());
         CheckBox addonsOverride = new CheckBox("Override addons folder");
@@ -156,6 +156,7 @@ final class OptionsDialog {
         root.setPadding(new Insets(12 * Ui.SCALE, 16 * Ui.SCALE, 12 * Ui.SCALE, 16 * Ui.SCALE));
         Stage d = Ui.dialog(owner, "Options", root);
         ok.setOnAction(ev -> {
+            boolean toSqlite = sqlite.isSelected() && settings.store().equals("files");
             settings.set("heap", gb(heap) + "g");
             settings.set("heap.pretouch", String.valueOf(pretouch.isSelected()));
             settings.set("gc", (gc.getSelectionModel().getSelectedIndex() == 1) ? "g1" : "zgc");
@@ -172,6 +173,9 @@ final class OptionsDialog {
             settings.set("check.updates", String.valueOf(updates.isSelected()));
             settings.set("icon", (icon.getSelectionModel().getSelectedIndex() == 1) ? "original" : "brodgar");
             d.close();
+            if(toSqlite)    // the map and the minimap icons of the known worlds, from the game's own store
+                DataMigrator.offer(owner, Launcher.home().resolve("client"),
+                                   savedataOverride.isSelected() ? savedataDir.getText() : "");
         });
         cancel.setOnAction(ev -> d.close());
         d.showAndWait();

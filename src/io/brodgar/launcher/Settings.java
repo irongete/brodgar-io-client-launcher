@@ -45,6 +45,9 @@ public final class Settings {
         # sqlite: -Dhaven.store=sqlite, the map and the resource cache in client/savedata/map.sqlite and
         # rescache.sqlite; files: %APPDATA%\\Haven and Hearth\\data, the game's own store
         store=files
+        # true: the first-start setup asked to import the map and the minimap icons of the game's cache into
+        # the SQLite store; the launcher opens the copy once the client is installed, then writes false
+        store.import=false
 
         # release: non-prerelease tags only; beta: all tags
         channel=beta
@@ -79,8 +82,8 @@ public final class Settings {
         # false: no release lookup for the launcher or the client
         check.updates=true
 
-        # true: the first-start setup, one page each for the resource pack, the resource cache, the SQLite
-        # store and the game's memory, before the window; the setup writes false when it is finished
+        # true: the first-start setup, one page each for the resource pack, the resource cache, the portable
+        # client and the game's memory, before the window; the setup writes false when it is finished
         firstrun=true
 
         # GitHub owner/repo of the client releases; asset name = <asset.prefix><tag>.zip
@@ -145,6 +148,7 @@ public final class Settings {
     String savedataDir()      {return get("savedata.dir", "");}
     String icon()             {return "original".equalsIgnoreCase(get("icon", "brodgar")) ? "original" : "brodgar";}
     boolean checkUpdates()    {return !"false".equalsIgnoreCase(get("check.updates", "true"));}
+    boolean storeImport()     {return "true".equalsIgnoreCase(get("store.import", "false"));}
     boolean firstRun()        {return !"false".equalsIgnoreCase(get("firstrun", "true"));}
 
     /** {@link Launch} from the current values. */

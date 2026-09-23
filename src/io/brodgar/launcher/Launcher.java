@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  *
  * <p>Start: JavaFX ({@link Ui#startup}), the first-start setup while <code>firstrun</code> is on
- * ({@link FirstRunDialog}: the resource pack, the resource cache, the SQLite store and the game's memory, a page
+ * ({@link FirstRunDialog}: the resource pack, the resource cache, the portable client and the game's memory, a page
  * each, written on Finish), then the window ({@link Ui}), then on a thread: {@link #updateSelf} (shipped,
  * released launchers only), {@link #update} (release check, download, unpack), {@link Ui#ready} with Play or
  * Retry, or {@link Ui#idle}. Play:
@@ -146,6 +146,11 @@ public final class Launcher {
             case READY, INSTALLED_ANYWAY -> ui.ready("Play", this::play);
             case NO_RELEASE -> ui.idle();
             case NOTHING -> ui.ready("Retry", this::prepare);
+        }
+        if(client.isInstalled() && settings.storeImport()) {    // asked for by the first-start setup
+            settings.set("store.import", "false");
+            String savedata = settings.savedataOverride() ? settings.savedataDir() : "";
+            Ui.runAndWait(() -> DataMigrator.copy(ui.stage(), client.dir(), savedata));
         }
     }
 
