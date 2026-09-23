@@ -1,12 +1,12 @@
 #!/bin/sh
 # ----------------------------------------------------------------------
-#  brodgar.io launcher, Linux and macOS: run.bat's twin.
+#  Brodgar launcher, Linux and macOS: run.bat's twin.
 #
 #  It starts launcher.jar on the Java runtime in runtime/ beside it, so
 #  nothing has to be installed. On Linux, run it from the folder the
 #  launcher was unzipped to (in a file manager: right click, Run as a
 #  Program); from then on the launcher is in the applications menu too. On
-#  macOS Brodgar.io.app runs it, in the folder it keeps the launcher in.
+#  macOS Brodgar launcher.app runs it, in the folder it keeps the launcher in.
 #  Any extra arguments are passed to the launcher (--check prints what it
 #  would do, without a window).
 #
@@ -30,6 +30,6 @@ if [ ! -x runtime/bin/java ]; then
 fi
 if [ "$(uname -s)" = Darwin ]; then
   # the Dock's name and icon for the window: the process is java, not the app
-  exec runtime/bin/java -Xdock:name=Brodgar.io -Xdock:icon=icon.png -jar launcher.jar "$@"
+  exec runtime/bin/java "-Xdock:name=Brodgar launcher" -Xdock:icon=icon.png -jar launcher.jar "$@"
 fi
 exec runtime/bin/java -jar launcher.jar "$@"

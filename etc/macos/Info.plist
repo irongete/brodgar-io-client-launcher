@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>Brodgar.io</string>
+  <string>Brodgar launcher</string>
   <key>CFBundleDisplayName</key>
-  <string>Brodgar.io</string>
+  <string>Brodgar launcher</string>
   <key>CFBundleIdentifier</key>
   <string>io.brodgar.launcher</string>
   <key>CFBundleExecutable</key>

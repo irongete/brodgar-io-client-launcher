@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Main class. Keeps <code>client/</code> at the channel's newest GitHub release and starts it on
  * <code>runtime/</code>. Home is the folder of <code>launcher.jar</code>, or <code>-Dlauncher.home</code>; on
- * macOS that folder is <code>~/Library/Application Support/Brodgar.io</code>, where <code>Brodgar.io.app</code>
+ * macOS that folder is <code>~/Library/Application Support/Brodgar.io</code>, where <code>Brodgar launcher.app</code>
  * keeps the launcher ({@link Os}):
  * <pre>
  *   run.bat                starts launcher.jar on runtime/ (run.sh on Linux and macOS, {@link Os#STARTER})
@@ -84,7 +84,7 @@ public final class Launcher {
             FirstRunDialog.show(settings);
         Launcher[] l = new Launcher[1];
         Path jar = jar();
-        Ui ui = Ui.open(TITLE, settings, ((jar != null) ? jar.getParent() : home).resolve(Trailer.DIR), c -> l[0].channel(c), () -> l[0].options(), () -> l[0].clientFolder());
+        Ui ui = Ui.open(title(), settings, ((jar != null) ? jar.getParent() : home).resolve(Trailer.DIR), c -> l[0].channel(c), () -> l[0].options(), () -> l[0].clientFolder());
         l[0] = new Launcher(home, settings, client, javaw, ui, shipped, a.contains("--no-launcher-update"));
         new Thread(l[0]::prepare, "launcher-update").start();
     }
@@ -328,7 +328,7 @@ public final class Launcher {
     }
 
     /**
-     * <code>cmd /c start "brodgar.io client" /wait /D dir cmd /c java.exe ...args ^|^| pause</code>: the client
+     * <code>cmd /c start "Brodgar client" /wait /D dir cmd /c java.exe ...args ^|^| pause</code>: the client
      * on <code>java.exe</code> in its own console window; the outer cmd waits, so the returned process ends
      * with the client. <code>^|^|</code> keeps the outer cmd from evaluating <code>||</code>. java.exe is
      * given relative to <code>dir</code> (<code>..\runtime\bin\java.exe</code>) so no quoting is needed after
@@ -346,7 +346,7 @@ public final class Launcher {
         if(exe.indexOf(' ') >= 0)
             exe = "\"" + exe + "\"";
         List<String> client = command(java, s.launch());
-        List<String> cmd = new ArrayList<>(List.of("cmd.exe", "/c", "start", "\"brodgar.io client\"", "/wait", "/D", "\"" + dir + "\"", "cmd.exe", "/c", exe));
+        List<String> cmd = new ArrayList<>(List.of("cmd.exe", "/c", "start", "\"Brodgar client\"", "/wait", "/D", "\"" + dir + "\"", "cmd.exe", "/c", exe));
         cmd.addAll(client.subList(1, client.size()));           // the arguments of command(), java.exe as above
         cmd.addAll(List.of("^|^|", "pause"));
         return cmd;
@@ -459,9 +459,15 @@ public final class Launcher {
         return (jar != null) ? jar.getParent() : Paths.get("").toAbsolutePath();
     }
 
-    /** The window title: no versions there (the launcher's is in the update messages, the client's in the
-     *  status line). */
-    static final String TITLE = "Brodgar.io Launcher";
+    /** The product, as the window titles name it. */
+    static final String PRODUCT = "Brodgar launcher";
+
+    /** The window title, worded as the client's (<code>Haven &amp; Hearth - Brodgar client v2.2-beta</code>): the
+     *  product and its version as the release tag says it, <code>Brodgar launcher v7</code>, or
+     *  <code>Brodgar launcher dev</code> for a build <code>publish.ps1</code> did not name. */
+    static String title() {
+        return PRODUCT + " " + (released() ? "v" + version() : "dev");
+    }
 
     /** The window icon, in the jar beside the classes: the client's dolmen on a parchment tile (the client's own
      *  is the blue one), <code>etc/icon.png</code> out of the client's <code>tools/icon.py --style parchment</code>. */

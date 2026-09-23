@@ -1,12 +1,12 @@
 <?xml version="1.0" ?>
 
-<!-- The brodgar.io launcher. `ant dist` builds the folder a Windows player unzips and runs:
+<!-- The Brodgar launcher. `ant dist` builds the folder a Windows player unzips and runs:
        build/dist/Brodgar/run.bat        starts the launcher on the runtime beside it
        build/dist/Brodgar/launcher.jar
        build/dist/Brodgar/runtime/       a Java runtime cut from the JDK (jlink), which also runs the client
      `ant dist-linux-x64` builds the same for Linux, build/dist-linux-x64/brodgar.io-launcher/, with run.sh for
      run.bat and icon.png for the applications menu; `ant dist-macos-arm64` the macOS app,
-     build/dist-macos-arm64/Brodgar.io.app, with the same files in Contents/Resources/launcher, which the app
+     build/dist-macos-arm64/Brodgar launcher.app, with the same files in Contents/Resources/launcher, which the app
      copies out at its first start (etc/macos/launcher says why). `ant release` zips the three, Windows' under two
      names (asset.windows-legacy says why). Nothing here is
      fetched from the network and nothing built is committed: the runtime is a product of the JDK on the build
@@ -83,7 +83,7 @@
       <zipfileset dir="etc" includes="icon.png icon-client.png icon-client-original.png" prefix="io/brodgar/launcher" />
       <manifest>
         <attribute name="Main-Class" value="${main.class}" />
-        <attribute name="Implementation-Title" value="brodgar.io launcher" />
+        <attribute name="Implementation-Title" value="Brodgar launcher" />
         <attribute name="Implementation-Version" value="${version}" />
       </manifest>
     </jar>
@@ -162,12 +162,12 @@
     <echo message="Launcher ready: build/dist-linux-x64/brodgar.io-launcher/run.sh" />
   </target>
 
-  <!-- macOS: Brodgar.io.app, whose executable (etc/macos/launcher, LF) copies the launcher's files in
+  <!-- macOS: Brodgar launcher.app, whose executable (etc/macos/launcher, LF) copies the launcher's files in
        Contents/Resources/launcher out to ~/Library/Application Support/Brodgar.io and starts them there. The
        version goes into Info.plist as well. -->
   <target name="dist-macos-arm64" depends="jar">
     <delete dir="build/dist-macos-arm64" />
-    <property name="contents" value="build/dist-macos-arm64/Brodgar.io.app/Contents" />
+    <property name="contents" value="build/dist-macos-arm64/Brodgar launcher.app/Contents" />
     <payload platform="macos-arm64" dir="${contents}/Resources/launcher" />
     <copy file="etc/macos/Info.plist" todir="${contents}">
       <filterset>
@@ -177,7 +177,7 @@
     <mkdir dir="${contents}/MacOS" />
     <fixcrlf srcdir="etc/macos" includes="launcher" destdir="${contents}/MacOS" eol="lf" />
     <copy file="etc/icon.icns" todir="${contents}/Resources" />
-    <echo message="Launcher ready: build/dist-macos-arm64/Brodgar.io.app" />
+    <echo message="Launcher ready: build/dist-macos-arm64/Brodgar launcher.app" />
   </target>
 
   <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), media/, and

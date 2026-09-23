@@ -22,7 +22,7 @@ public final class Settings {
     static final String RESOURCE_PROXY_URL = "https://res.brodgar.io/";
 
     private static final String DEFAULTS = """
-        # brodgar.io launcher settings. A missing key takes its default. See README.md, "Settings".
+        # Brodgar launcher settings. A missing key takes its default. See README.md, "Settings".
 
         # -Xms<heap> -Xmx<heap>
         heap=2g
@@ -76,7 +76,7 @@ public final class Settings {
         savedata.override=false
         savedata.dir=
 
-        # the client's window icon: brodgar, the blue brodgar.io dolmen (the client's own default, line
+        # the client's window icon: brodgar, the blue Brodgar dolmen (the client's own default, line
         # removed), or original, the Haven & Hearth one (haven.icon in client/haven-config.properties)
         icon=brodgar
 

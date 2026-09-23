@@ -14,7 +14,7 @@ import java.util.Locale;
  * opened, and on Linux the applications menu entry. Released for Windows x64, macOS on Apple Silicon and Linux
  * x64 ({@link #asset}); elsewhere the launcher runs wherever Java and JavaFX do, and is never updated.
  *
- * <p>On macOS the player starts <code>Brodgar.io.app</code>, which keeps the launcher in
+ * <p>On macOS the player starts <code>Brodgar launcher.app</code>, which keeps the launcher in
  * <code>~/Library/Application Support/Brodgar.io</code> and starts <code>run.sh</code> there: that folder is
  * home (<code>etc/macos/launcher</code> says why). On Linux home is the folder the zip was unpacked to, as on
  * Windows.
@@ -37,7 +37,7 @@ final class Os {
     static final String ICON = "icon.png";
 
     /** Where the launcher's files sit in {@link #asset} once unpacked (its one top folder stripped,
-     *  {@link Unzip}): at its root, or on macOS inside the app, <code>Brodgar.io.app</code>. */
+     *  {@link Unzip}): at its root, or on macOS inside the app, <code>Brodgar launcher.app</code>. */
     static final String PAYLOAD = MAC ? "Contents/Resources/launcher" : "";
 
     /** The platform's name as a player knows it, for the labels that name it. */
@@ -111,8 +111,8 @@ final class Os {
         String entry = String.join("\n",
             "[Desktop Entry]",
             "Type=Application",
-            "Name=Brodgar.io",
-            "Comment=The brodgar.io launcher for Haven & Hearth",
+            "Name=Brodgar launcher",
+            "Comment=The Brodgar launcher for Haven & Hearth",
             "Exec=" + quoted(home.resolve(STARTER).toString()),
             "Path=" + escaped(home.toString()),
             "Icon=" + escaped(home.resolve(ICON).toString()),

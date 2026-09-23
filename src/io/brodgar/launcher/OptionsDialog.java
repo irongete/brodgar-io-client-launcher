@@ -81,7 +81,7 @@ final class OptionsDialog {
         CheckBox updates = new CheckBox("Look for a newer launcher and game when the launcher opens");
         updates.setSelected(settings.checkUpdates());
         ComboBox<String> icon = new ComboBox<>();
-        icon.getItems().addAll("The brodgar.io dolmen, in blue", "The original Haven & Hearth icon");
+        icon.getItems().addAll("The Brodgar dolmen, in blue", "The original Haven & Hearth icon");
         icon.getSelectionModel().select(settings.icon().equals("original") ? 1 : 0);
         Image[] icons = gameIcons();
         icon.setCellFactory(list -> iconCell(icon, icons));

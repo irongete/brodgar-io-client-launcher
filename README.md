@@ -1,6 +1,6 @@
-# Brodgar.io Launcher
+# Brodgar launcher
 
-The launcher for the [brodgar.io client](https://github.com/irongete/brodgar-io-client) of Haven & Hearth.
+The launcher for the [Brodgar client](https://github.com/irongete/brodgar-io-client) of Haven & Hearth.
 Windows, macOS (Apple Silicon: M1 and later) and Linux (x64); it brings its own Java.
 
 - **Installs the client** and keeps it at the newest release, on the **Release** or the **Beta** channel.
@@ -18,15 +18,15 @@ Windows, macOS (Apple Silicon: M1 and later) and Linux (x64); it brings its own 
    - **Windows**: **[brodgar.io-launcher-windows-x64.zip](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-windows-x64.zip)**.
      Unzip it anywhere (the client and your game data will live in that folder) and run `run.bat`.
    - **macOS**: **[brodgar.io-launcher-macos-arm64.zip](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-macos-arm64.zip)**.
-     Open it and double-click **Brodgar.io**; you can move it to Applications or the Dock first. The app is
+     Open it and double-click **Brodgar launcher**; you can move it to Applications or the Dock first. The app is
      not signed by Apple, so the first time macOS refuses it: open **System Settings**, **Privacy &
-     Security**, and at the bottom press **Open Anyway** by *"Brodgar.io" was blocked*. Once only; from then
+     Security**, and at the bottom press **Open Anyway** by *"Brodgar launcher" was blocked*. Once only; from then
      on it opens with a double-click. The client and your game data live in
      `~/Library/Application Support/Brodgar.io`.
    - **Linux**: **[brodgar.io-launcher-linux-x64.zip](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-linux-x64.zip)**.
      Unzip it anywhere (the `brodgar.io-launcher` folder is where the client and your game data will live)
      and run `run.sh` in it: in a terminal, or in the file manager with a right click, **Run as a Program**.
-     From then on **Brodgar.io** is in your applications menu.
+     From then on **Brodgar launcher** is in your applications menu.
 2. The first start asks four things, a page each: the resource pack, the resource cache, the SQLite store and
    the game's memory (all in **Options...** later; `firstrun=true` in `launcher.properties` asks again). Then
    it downloads the client.

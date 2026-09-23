@@ -104,7 +104,7 @@ final class FirstRunDialog {
         VBox root = new VBox(top, deck, OptionsDialog.buttons(back, next));
         root.setPadding(new Insets(16 * Ui.SCALE, 20 * Ui.SCALE, 16 * Ui.SCALE, 20 * Ui.SCALE));
         go(0);
-        stage = Ui.dialog(null, Launcher.TITLE + " — first start", root);
+        stage = Ui.dialog(null, Launcher.title() + " — first start", root);
         stage.setOnCloseRequest(ev -> System.exit(0));    // nothing written: the setup returns at the next start
     }
 

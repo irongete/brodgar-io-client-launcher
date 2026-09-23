@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Publish the brodgar.io launcher on GitHub: build, zip, tag, push, release.
+  Publish the Brodgar launcher on GitHub: build, zip, tag, push, release.
 
 .DESCRIPTION
     .\publish.ps1              the next number:  v1 -> v2
@@ -46,7 +46,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = 'irongete/brodgar-io-client-launcher'
-$product = 'brodgar.io launcher'
+$product = 'Brodgar launcher'
 Set-Location $PSScriptRoot
 
 function Run {

@@ -57,7 +57,7 @@ public final class Updater {
         } catch(Exception e) {
             // cross-platform look and feel then
         }
-        frame = new JFrame("brodgar.io launcher v" + version);
+        frame = new JFrame(Launcher.PRODUCT + " v" + version);         // the launcher it installs
         frame.setIconImage(Launcher.icon());
         status = new JLabel("Waiting for the launcher to close...");
         bar = new JProgressBar(0, 1000);
