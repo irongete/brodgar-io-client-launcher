@@ -13,10 +13,13 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Main class. Keeps <code>client/</code> at the channel's newest GitHub release and starts it on
- * <code>runtime/</code>. Home is the folder of <code>launcher.jar</code>, or <code>-Dlauncher.home</code>:
+ * <code>runtime/</code>. Home is the folder of <code>launcher.jar</code>, or <code>-Dlauncher.home</code>; on
+ * macOS that folder is <code>~/Library/Application Support/Brodgar.io</code>, where <code>Brodgar.io.app</code>
+ * keeps the launcher ({@link Os}):
  * <pre>
- *   run.bat                starts launcher.jar on runtime/
+ *   run.bat                starts launcher.jar on runtime/ (run.sh on Linux and macOS, {@link Os#STARTER})
  *   launcher.jar
+ *   icon.png               Linux and macOS: the menu entry's icon ({@link Os#menuEntry}) and the Dock's
  *   media/                 the trailer and its poster, beside the jar ({@link Trailer})
  *   runtime/               jlink runtime; runs the launcher and the client
  *   client/                the client release: hafen.jar, lib/, resource jars, addons/, haven-config.properties
@@ -38,7 +41,8 @@ import java.util.concurrent.TimeUnit;
  * closes — an unpacked release restores the zip's copy), then {@link #command} runs with cwd <code>client/</code>
  * and the launcher stays, Play offered again 3 s later: as many clients as wanted. <code>--check</code>:
  * resolve and print, no window, no writes.
- * <code>--no-launcher-update</code>: skip {@link #updateSelf}.
+ * <code>--no-launcher-update</code>: skip {@link #updateSelf}. On Linux a launcher as shipped also keeps its
+ * applications menu entry ({@link Os#menuEntry}).
  */
 public final class Launcher {
     private final Path home;
@@ -73,6 +77,8 @@ public final class Launcher {
             check(home, settings, client, javaw, shipped);
             return;
         }
+        if(shipped)
+            Os.menuEntry(home);
         Ui.startup();
         if(settings.firstRun())
             FirstRunDialog.show(settings);
@@ -117,13 +123,14 @@ public final class Launcher {
         }
     }
 
-    /** Open client folder callback: <code>Desktop.open(client/)</code>; error dialog if absent. */
+    /** Open client folder callback: <code>client/</code> in the file manager ({@link Os#open}); error dialog if
+     *  absent. */
     private void clientFolder() {
         Path dir = client.dir();
         try {
             if(!Files.isDirectory(dir))
                 throw new IOException("no client is installed yet, so " + dir + " does not exist");
-            java.awt.Desktop.getDesktop().open(dir.toFile());
+            Os.open(dir);
         } catch(IOException | RuntimeException e) {
             ui.error("The client folder could not be opened: " + e.getMessage());
         }
@@ -175,14 +182,15 @@ public final class Launcher {
         }
     }
 
-    /** Shipped, {@link #released} launchers with <code>check.updates</code> and no <code>--no-launcher-update</code>:
-     *  if {@link #newerLauncher} finds a tag, {@link Updater#launch} and <code>System.exit(0)</code>. A failed
-     *  launch is reported in the status line; a failed lookup is left to {@link #update} to report. */
+    /** Shipped, {@link #released} launchers with <code>check.updates</code> and no <code>--no-launcher-update</code>,
+     *  on a platform with a release asset ({@link Os#asset}): if {@link #newerLauncher} finds a tag,
+     *  {@link Updater#launch} and <code>System.exit(0)</code>. A failed launch is reported in the status line; a
+     *  failed lookup is left to {@link #update} to report. */
     private void updateSelf() {
         if(!shipped)
             return;
         Updater.tidy(home);
-        if(!released() || noLauncherUpdate || !settings.checkUpdates())
+        if(!released() || noLauncherUpdate || !settings.checkUpdates() || (Os.asset() == null))
             return;
         String tag;
         try {
@@ -196,7 +204,7 @@ public final class Launcher {
         String v = GitHubRelease.version(tag);
         try {
             ui.status("Launcher v" + v + " is out: updating...");
-            Updater.launch(home, v, GitHubRelease.assetUrl(settings.launcherRepo(), tag, Updater.ASSET));
+            Updater.launch(home, v, GitHubRelease.assetUrl(settings.launcherRepo(), tag, Os.asset()));
         } catch(Exception e) {
             ui.status("Launcher v" + v + " could not be installed: " + e.getMessage());
             Updater.tidy(home);
@@ -277,8 +285,8 @@ public final class Launcher {
 
     /** Play: configure the client's file, pause the trailer, {@link #start}, and offer Play again 3 s later:
      *  another client can be opened, as many as wanted. If the process ends within those 3 s: error dialog with
-     *  the exit code and the log tail. With the console on, the <code>pause</code> keeps the process alive, so
-     *  the error is shown there instead. */
+     *  the exit code and the log tail. With the console on (Windows), the <code>pause</code> keeps the process
+     *  alive, so the error is shown there instead. */
     private void play() {
         ui.busy();
         ui.status("Starting the client...");
@@ -300,11 +308,12 @@ public final class Launcher {
     }
 
     /** Start the client in <code>client/</code>: {@link #command} with stdout/stderr to <code>client.log</code>,
-     *  or with the console on {@link #consoleCommand}, the log then holding a note and cmd's own output. */
+     *  or with the console on {@link #consoleCommand}, the log then holding a note and cmd's own output. The
+     *  console is a Windows one: elsewhere the log is all there is. */
     private Process start() throws IOException {
         Path log = home.resolve("client.log");
         ProcessBuilder pb = new ProcessBuilder().directory(client.dir().toFile()).redirectErrorStream(true);
-        if(settings.console()) {
+        if(settings.console() && Os.WINDOWS) {
             Files.writeString(log, "The client was started with a console window: what it printed is there." + System.lineSeparator());
             pb.command(consoleCommand(javaw, settings, client.dir())).redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()));
         } else {
@@ -348,7 +357,8 @@ public final class Launcher {
         return s.console() ? consoleJava(javaw) : javaw;
     }
 
-    /** <code>java.exe</code> beside <code>javaw</code>, or <code>javaw</code> itself if absent. */
+    /** <code>java.exe</code> beside <code>javaw</code>, or <code>javaw</code> itself if absent: always, off
+     *  Windows, where <code>javaw</code> is <code>java</code> ({@link Os#javaw}). */
     static Path consoleJava(Path javaw) {
         Path java = javaw.resolveSibling("java.exe");
         return Files.exists(java) ? java : javaw;
@@ -357,8 +367,8 @@ public final class Launcher {
     /**
      * The client command line: <code>java -Xms -Xmx [-XX:+AlwaysPreTouch] [-XX:+UseZGC [-XX:+ZGenerational]]
      * [--sun-misc-unsafe-memory-access=allow] --add-exports ×3 --enable-native-access
-     * [-Dsun.java2d.uiScale.enabled=false] -Djava.net.preferIPv6Addresses= [-Dhaven.store=sqlite] java.opts...
-     * -jar hafen.jar [-U resourceCacheUrl]</code>.
+     * [-Dsun.java2d.uiScale.enabled=false] -Djava.net.preferIPv6Addresses= [-Dhaven.toolkit=cgl]
+     * [-Dhaven.store=sqlite] java.opts... -jar hafen.jar [-U resourceCacheUrl]</code>.
      * Client configuration is not here: see {@link ClientInstall#configure}.
      */
     static List<String> command(Path java, Settings.Launch l) {
@@ -383,6 +393,11 @@ public final class Launcher {
         if(!l.uiScale())
             cmd.add("-Dsun.java2d.uiScale.enabled=false");
         cmd.add("-Djava.net.preferIPv6Addresses=" + l.ipv6());
+        // macOS: the client's Cocoa toolkit, as its own `ant run` and macos.command name it. There is no arm64
+        // JOGL native, and the LWJGL AWT canvas the client would fall through to draws off the main thread,
+        // which AppKit kills the process for.
+        if(Os.MAC)
+            cmd.add("-Dhaven.toolkit=cgl");
         if(l.store().equals("sqlite"))
             cmd.add("-Dhaven.store=sqlite");                 // absent: the client's default, files
         cmd.addAll(l.opts());
@@ -401,10 +416,12 @@ public final class Launcher {
         System.out.println("launcher:  " + (released() ? "v" : "") + version() + (!shipped ? " (a development run: not updated)"
                                                        : !released() ? " (a development build: never updated)"
                                                        : " (as shipped: kept at the channel's newest release)"));
-        if(shipped && released()) {
+        if(shipped && released() && (Os.asset() == null)) {
+            System.out.println("newer:     not looked for: no launcher is released for " + Os.label() + " on " + System.getProperty("os.arch"));
+        } else if(shipped && released()) {
             try {
                 String tag = newerLauncher(settings);
-                System.out.println("newer:     " + ((tag == null) ? "none" : tag + "  " + GitHubRelease.assetUrl(settings.launcherRepo(), tag, Updater.ASSET)));
+                System.out.println("newer:     " + ((tag == null) ? "none" : tag + "  " + GitHubRelease.assetUrl(settings.launcherRepo(), tag, Os.asset())));
             } catch(Exception e) {
                 System.out.println("newer:     unreachable: " + e);
             }
@@ -424,9 +441,11 @@ public final class Launcher {
         System.out.println("pack:      " + (!settings.resourcePack() ? "off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
         System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("setup:     " + (settings.firstRun() ? "pending (firstrun=true): the first-start setup opens before the window" : "done"));
-        System.out.println("console:   " + (settings.console() ? "on (a command window, kept open when the client fails)" : "off (what the client prints goes to client.log)"));
+        System.out.println("console:   " + (!Os.WINDOWS ? "none on " + Os.label() + " (what the client prints goes to client.log)"
+                                                 : settings.console() ? "on (a command window, kept open when the client fails)"
+                                                 : "off (what the client prints goes to client.log)"));
         System.out.println("command:   " + String.join(" ", command(javaw, settings)));
-        if(settings.console())
+        if(settings.console() && Os.WINDOWS)
             System.out.println("window:    " + String.join(" ", consoleCommand(javaw, settings, client.dir())));
         System.out.println("cwd:       " + client.dir());
     }
@@ -498,13 +517,14 @@ public final class Launcher {
         }
     }
 
-    /** <code>home/runtime/bin/javaw.exe</code> if present; else <code>java.home/bin/javaw.exe</code>, else
+    /** {@link Os#javaw} of <code>home/runtime</code> if present (<code>bin/javaw.exe</code> on Windows,
+     *  <code>bin/java</code> elsewhere); else the same of <code>java.home</code>, else
      *  <code>java.home/bin/java</code>. */
     static Path javaw(Path home) {
-        Path shipped = home.resolve("runtime").resolve("bin").resolve("javaw.exe");
+        Path shipped = Os.javaw(home.resolve("runtime"));
         if(Files.exists(shipped))
             return shipped;
-        Path own = Paths.get(System.getProperty("java.home"), "bin", "javaw.exe");
+        Path own = Os.javaw(Paths.get(System.getProperty("java.home")));
         return Files.exists(own) ? own : Paths.get(System.getProperty("java.home"), "bin", "java");
     }
 

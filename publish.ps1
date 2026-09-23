@@ -11,9 +11,11 @@
   commit, then confirmed before the build (-Yes skips the question).
 
   Refuses a dirty tree, a branch other than master (-Branch), a version not above GitHub's newest and a tag
-  that exists anywhere. Runs `ant -Dversion=<n> release` -- launcher.jar, run.bat and the jlink runtime cut
-  from jdk.home in build.properties, zipped -- tags vN, pushes the tag and then the branch, and creates the
-  release with the zip. Then `.\publish-steam.ps1` puts the same launcher on the Steam Workshop.
+  that exists anywhere. Runs `ant -Dversion=<n> release` -- a zip per platform, launcher.jar, the starter and a
+  jlink runtime: Windows' cut from jdk.home, Linux's and macOS's from their jmods, all named in build.properties
+  -- tags vN, pushes the tag and then the branch, and creates the release with the zips: the three, and
+  Windows' again under the name the launchers from before the other platforms ask for. Then
+  `.\publish-steam.ps1` puts the same launcher on the Steam Workshop.
   Needs git, ant and gh (`gh auth login`).
 
 .PARAMETER Version
@@ -120,7 +122,9 @@ $title = "$product $tag"
 if ($newest -and $current -eq 'master' -and (Parse-Version $Version).Key -le $newest.Version.Key) {
     throw "$tag is not above $($newest.Tag), the newest on GitHub, and a launcher never installs a lower version: name one above it, or leave -Version out"
 }
-$asset = Join-Path 'build' 'brodgar.io-launcher.zip'   # no version in the name: the unzipped folder outlives it
+# no version in the names: the unzipped folder outlives them. brodgar.io-launcher.zip is Windows' again, under the
+# name the launchers from before the other platforms ask for (build.xml, asset.windows-legacy)
+$assets = @('brodgar.io-launcher-windows-x64.zip', 'brodgar.io-launcher.zip', 'brodgar.io-launcher-linux-x64.zip', 'brodgar.io-launcher-macos-arm64.zip') | ForEach-Object { Join-Path 'build' $_ }
 if (git tag -l $tag) { throw "the tag $tag already exists in this clone" }
 if ($needsGitHub -and ($published | Where-Object { $_.Tag -eq $tag })) { throw "$tag is published on GitHub already" }
 if (-not $NoPublish -and (git ls-remote --tags origin $tag)) { throw "the tag $tag already exists on origin" }
@@ -169,9 +173,12 @@ if (-not $jdk) { $jdk = "the JDK ant runs on ($(& java -version 2>&1 | Select-Ob
 Write-Host "Building $title from $current ($short) with $jdk..."
 $classes = Join-Path 'build' 'classes'
 if (Test-Path $classes) { Remove-Item -Recurse -Force $classes }
+$assets | Where-Object { Test-Path $_ } | Remove-Item -Force   # an older build's zip is never what gets published
 Run ant @("-Dversion=$Version", 'release')
-if (-not (Test-Path $asset)) { throw "the build produced no $asset" }
-Write-Host ("Asset: {0} ({1:N1} MB)" -f $asset, ((Get-Item $asset).Length / 1MB))
+foreach ($asset in $assets) {
+    if (-not (Test-Path $asset)) { throw "the build produced no $asset" }
+    Write-Host ("Asset: {0} ({1:N1} MB)" -f $asset, ((Get-Item $asset).Length / 1MB))
+}
 
 # --- tag, push, release -------------------------------------------------------------------------------------
 Run git @('tag', '-a', $tag, '-m', $title)
@@ -181,7 +188,7 @@ if ($NoPublish) {
 }
 Run git @('push', 'origin', $tag)
 Run git @('push', 'origin', $current)
-$create = @('release', 'create', $tag, $asset, '--repo', $repo, '--title', $title, '--notes-file', $notesFile)
+$create = @('release', 'create', $tag) + $assets + @('--repo', $repo, '--title', $title, '--notes-file', $notesFile)
 if ($Draft) { $create += '--draft' }
 Run gh $create
 Write-Host "Published $title. The Steam Workshop takes the same one: .\publish-steam.ps1"

@@ -19,6 +19,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.media.Media;
+import javafx.scene.media.MediaException;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.media.MediaView;
 import javafx.scene.paint.Color;
@@ -33,8 +34,9 @@ import javafx.util.Duration;
  * <code>launcher.jar</code> (in the Steam item's folder, or home). A click on the video plays or pauses it; a double click fills the screen with
  * it alone ({@link Ui}) and back (as does Esc) — the click's pause waits a moment, in case a second one comes.
  * A bar along the bottom, there while the mouse is over the video, has the position (drag or click to seek)
- * and the time. At the end it stops: the poster again, a click plays it from the start. Without the video: the
- * poster alone; without that either, a dark pane.
+ * and the time. At the end it stops: the poster again, a click plays it from the start. Without the video, or
+ * without a player for it (on Linux JavaFX plays H.264 through the system's own FFmpeg libraries and sound through
+ * its ALSA, which not every system has): the poster alone; without that either, a dark pane.
  */
 final class Trailer extends StackPane {
     static final double WIDTH = 640 * Ui.SCALE, HEIGHT = 360 * Ui.SCALE;
@@ -72,7 +74,14 @@ final class Trailer extends StackPane {
             return;
         }
 
-        player = new MediaPlayer(new Media(video.toUri().toString()));
+        try {
+            player = new MediaPlayer(new Media(video.toUri().toString()));
+        } catch(MediaException | LinkageError e) {
+            // no player for it, or no JavaFX Media at all (on Linux its library links the system's ALSA): the
+            // poster alone
+            sign.setVisible(false);
+            return;
+        }
         player.setOnEndOfMedia(player::stop);           // a pause and a seek here would start it over
         MediaView view = new MediaView(player);
         view.setPreserveRatio(true);
@@ -136,6 +145,18 @@ final class Trailer extends StackPane {
         poster.toFront();
         sign.toFront();
         bar.toFront();
+        // a player that fails once it opens the video: the poster alone, as when there is none
+        player.setOnError(() -> {
+            view.setVisible(false);
+            poster.visibleProperty().unbind();
+            poster.setVisible(true);
+            sign.visibleProperty().unbind();
+            sign.setVisible(false);
+            bar.visibleProperty().unbind();
+            bar.setVisible(false);
+            setCursor(Cursor.DEFAULT);
+            setOnMouseClicked(null);
+        });
     }
 
     /** Pause, if playing. */

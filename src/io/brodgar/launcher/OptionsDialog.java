@@ -58,10 +58,10 @@ final class OptionsDialog {
         gc.getItems().addAll("Concurrent (ZGC): frees memory while the game keeps running",
                              "Standard (G1): frees memory in short stops");
         gc.getSelectionModel().select(settings.gc().equals("g1") ? 1 : 0);
-        CheckBox uiScale = new CheckBox("Let Windows scale the game window");
+        CheckBox uiScale = new CheckBox("Let " + Os.label() + " scale the game window");
         uiScale.setSelected(settings.uiScale());
         ComboBox<String> ipv6 = new ComboBox<>();
-        ipv6.getItems().addAll("As Windows prefers", "IPv4 first", "IPv6 first");
+        ipv6.getItems().addAll("As " + Os.label() + " prefers", "IPv4 first", "IPv6 first");
         ipv6.getSelectionModel().select(switch(settings.ipv6()) { case "false" -> 1; case "true" -> 2; default -> 0; });
         CheckBox pack = new CheckBox("Download the brodgar.io resource pack");
         pack.setSelected(settings.resourcePack());

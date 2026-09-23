@@ -1,8 +1,8 @@
 # A push to master publishes the next version, v1 -> v2, the way it is done by hand: publish.ps1, which counts
-# the number from GitHub, builds, tags, pushes the tag and creates the release with the zip. The Run workflow
-# button takes a number instead. A Windows runner: the zip carries a runtime jlinked from the JDK the build
-# runs on, and the player's machine is Windows. The Steam Workshop is not here: publish-steam.ps1 needs the
-# Steam client, logged in.
+# the number from GitHub, builds, tags, pushes the tag and creates the release with the zips. The Run workflow
+# button takes a number instead. A Windows runner cuts every platform's runtime with the jlink of the JDK the
+# build runs on: Windows' from that JDK, Linux's and macOS's from their own jmods, fetched here for that very
+# version. The Steam Workshop is not here: publish-steam.ps1 needs the Steam client, logged in.
 name: Publish
 run-name: brodgar-io-launcher-${{ inputs.version && format('v{0}', inputs.version) || 'next' }}
 
@@ -24,7 +24,8 @@ concurrency:
   cancel-in-progress: false
 
 # what build.properties names on a development machine, fetched here: the JDK is the one ant runs on (Temurin,
-# with jlink), the OpenJFX jmods are the runtime's JavaFX; and ant itself, which the runner image lacks
+# with jlink), the OpenJFX jmods of each platform are its runtime's JavaFX, the Temurin jmods of Linux and macOS
+# their Java; and ant itself, which the runner image lacks
 env:
   JDK: '25'
   JAVAFX: '25.0.3'
@@ -54,15 +55,36 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JDK }}
 
-      - name: Ant and OpenJFX
+      # Each OpenJFX zip holds javafx-jmods-<version>, so each is unpacked in a folder of its own. The Temurin jmods
+      # must be of this JDK's very version (SEMANTIC_VERSION in its release file): jlink refuses any other.
+      - name: Ant, OpenJFX and the jmods
         if: steps.tagged.outputs.skip != 'true'
         run: |
+          $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest "https://archive.apache.org/dist/ant/binaries/apache-ant-$env:ANT-bin.zip" -OutFile "$env:RUNNER_TEMP\ant.zip"
           Expand-Archive "$env:RUNNER_TEMP\ant.zip" -DestinationPath $env:RUNNER_TEMP
           "$env:RUNNER_TEMP\apache-ant-$env:ANT\bin" >> $env:GITHUB_PATH
-          Invoke-WebRequest "https://download2.gluonhq.com/openjfx/$env:JAVAFX/openjfx-${env:JAVAFX}_windows-x64_bin-jmods.zip" -OutFile "$env:RUNNER_TEMP\jmods.zip"
-          Expand-Archive "$env:RUNNER_TEMP\jmods.zip" -DestinationPath $env:RUNNER_TEMP
-          "javafx.home=$($env:RUNNER_TEMP -replace '\\', '/')/javafx-jmods-$env:JAVAFX" | Set-Content build.properties -Encoding ascii
+          $jdk = [regex]::Match((Get-Content "$env:JAVA_HOME\release" -Raw), 'SEMANTIC_VERSION="([^"]+)"').Groups[1].Value
+          if (-not $jdk) { throw "$env:JAVA_HOME\release names no SEMANTIC_VERSION" }
+          $lines = @()
+          foreach ($p in @(@{ id = 'windows-x64'; fx = 'windows-x64' },
+                           @{ id = 'linux-x64'; fx = 'linux-x64'; os = 'linux'; arch = 'x64' },
+                           @{ id = 'macos-arm64'; fx = 'osx-aarch64'; os = 'mac'; arch = 'aarch64' })) {
+            $dir = "$env:RUNNER_TEMP\javafx-$($p.id)"
+            Invoke-WebRequest "https://download2.gluonhq.com/openjfx/$env:JAVAFX/openjfx-${env:JAVAFX}_$($p.fx)_bin-jmods.zip" -OutFile "$dir.zip"
+            Expand-Archive "$dir.zip" -DestinationPath $dir
+            $fx = "$dir\javafx-jmods-$env:JAVAFX" -replace '\\', '/'
+            if ($p.id -eq 'windows-x64') { $lines += "javafx.home=$fx"; continue }
+            $lines += "javafx.jmods.$($p.id)=$fx"
+            $dir = "$env:RUNNER_TEMP\jdk-$($p.id)"
+            Invoke-WebRequest "https://api.adoptium.net/v3/binary/version/jdk-$([uri]::EscapeDataString($jdk))/$($p.os)/$($p.arch)/jmods/hotspot/normal/eclipse" -OutFile "$dir.tar.gz"
+            New-Item -ItemType Directory $dir | Out-Null
+            & "$env:SystemRoot\System32\tar.exe" -xzf "$dir.tar.gz" -C $dir
+            if ($LASTEXITCODE -ne 0) { throw "the Temurin jmods of $($p.id) could not be unpacked" }
+            $lines += "jdk.jmods.$($p.id)=" + ((Get-ChildItem $dir -Directory | Select-Object -First 1).FullName -replace '\\', '/')
+          }
+          $lines | Set-Content build.properties -Encoding ascii
+          Get-Content build.properties
 
       - name: Publish
         if: steps.tagged.outputs.skip != 'true'

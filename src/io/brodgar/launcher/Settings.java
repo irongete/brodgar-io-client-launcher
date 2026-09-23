@@ -52,7 +52,8 @@ public final class Settings {
         # release: non-prerelease tags only; beta: all tags
         channel=beta
 
-        # true: java.exe in a cmd window; false: javaw.exe, output to client.log
+        # true: java.exe in a cmd window; false: javaw.exe, output to client.log (Windows; elsewhere the output
+        # always goes to client.log)
         console=false
 
         # haven.resurl in client/haven-config.properties, and -U on the client's command line, :=

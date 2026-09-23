@@ -1,11 +1,16 @@
 <?xml version="1.0" ?>
 
-<!-- The brodgar.io launcher. `ant dist` builds the folder a player unzips and runs:
+<!-- The brodgar.io launcher. `ant dist` builds the folder a Windows player unzips and runs:
        build/dist/Brodgar/run.bat        starts the launcher on the runtime beside it
        build/dist/Brodgar/launcher.jar
        build/dist/Brodgar/runtime/       a Java runtime cut from the JDK (jlink), which also runs the client
-     `ant release` zips it. Nothing here is fetched from the network and nothing built is committed: the
-     runtime is a product of the JDK on the build machine, and the release asset is where it travels.
+     `ant dist-linux-x64` builds the same for Linux, build/dist-linux-x64/brodgar.io-launcher/, with run.sh for
+     run.bat and icon.png for the applications menu; `ant dist-macos-arm64` the macOS app,
+     build/dist-macos-arm64/Brodgar.io.app, with the same files in Contents/Resources/launcher, which the app
+     copies out at its first start (etc/macos/launcher says why). `ant release` zips the three, Windows' under two
+     names (asset.windows-legacy says why). Nothing here is
+     fetched from the network and nothing built is committed: the runtime is a product of the JDK on the build
+     machine, and the release asset is where it travels.
 
      The JDK matters twice. It is the runtime the player gets, so it is the one the client is verified on
      (a Temurin LTS, 25 today); and it has to carry jlink, so it is a JDK, not a JRE. It is `jdk.home` in
@@ -18,7 +23,16 @@
      the development runs (`run`, `check`) go on the runtime the build just cut. The Workshop item runs on
      Steam's Java instead, so it carries the OpenJFX SDK of the same version, `javafx.sdk` (javafx-sdk-*,
      likewise), on its module path. The trailer and its poster, media/, travel as that folder beside the jar in
-     every layout, the build folder included. -->
+     every layout, the build folder included.
+
+     The other platforms' runtimes are cut by the same jlink from their own jmods: jlink links for another
+     platform from that platform's jmods of the very same JDK version, never from the JDK it runs on. They are
+     `jdk.jmods.<platform>` in build.properties, the Temurin jmods (a download of their own since JDK 24,
+     jdk-<version>-jmods-<platform>), and `javafx.jmods.<platform>`, the OpenJFX jmods
+     (javafx-jmods-<version>-<platform>), unpacked in this folder and ignored by git: one Windows machine
+     builds every platform's launcher. The icons of the other platforms, etc/icon.icns (the app's) and
+     etc/icon-256.png (Linux's icon.png), are etc/icon.png's drawing and tile, drawn by the client's
+     tools/icon.py at 824 px on a 1024 px canvas, Apple's icon grid. -->
 <project name="brodgar-launcher" default="dist">
   <property file="build.properties" />
   <property name="jdk.home" value="${java.home}" />
@@ -30,9 +44,17 @@
   <property name="version" value="dev" />
   <property name="app.name" value="Brodgar" />
   <property name="main.class" value="io.brodgar.launcher.Launcher" />
-  <!-- The release asset: what the launcher downloads to update itself, so Updater.java names it the same way. -->
+  <!-- The release assets: what the launcher downloads to update itself, so Os.java names them the same way. -->
   <!-- No version in the name: the folder a player unzips keeps its name while the launcher inside updates itself. -->
-  <property name="asset" value="brodgar.io-launcher.zip" />
+  <property name="asset.windows-x64" value="brodgar.io-launcher-windows-x64.zip" />
+  <property name="asset.linux-x64" value="brodgar.io-launcher-linux-x64.zip" />
+  <property name="asset.macos-arm64" value="brodgar.io-launcher-macos-arm64.zip" />
+  <!-- The Windows zip again, under the name it had when Windows was the only platform: the launchers from those days
+       ask for it to update themselves, and what they get asks for asset.windows-x64 from then on. -->
+  <property name="asset.windows-legacy" value="brodgar.io-launcher.zip" />
+  <!-- What the Linux and macOS zips store with mode 755: a build on Windows has no execute bit to carry, and both
+       the player's unzip and a launcher update's (Unzip.java) take it from the zip. -->
+  <property name="executables" value="**/Contents/MacOS/*,**/run.sh,**/runtime/bin/*,**/runtime/lib/jspawnhelper,**/runtime/lib/jexec" />
   <!-- What hafen.jar and its libraries need, by jdeps, plus the extra charsets, the EC provider a TLS
        handshake wants on a JDK before 22 (an empty module after), jdk.management, which the Options
        dialog reads the machine's memory through, and java.sql, which the addon store's SQLite driver
@@ -70,22 +92,53 @@
     </copy>
   </target>
 
+  <!-- jlink: the runtime of the modules above, at @{output}, from @{modulepath}. -->
+  <macrodef name="cutruntime">
+    <attribute name="modulepath" />
+    <attribute name="output" />
+    <sequential>
+      <delete dir="@{output}" />
+      <exec executable="${jdk.home}/bin/jlink" failonerror="true">
+        <arg value="--module-path" />
+        <arg value="@{modulepath}" />
+        <arg value="--add-modules" />
+        <arg value="${modules}" />
+        <arg value="--strip-debug" />
+        <arg value="--no-man-pages" />
+        <arg value="--no-header-files" />
+        <arg value="--compress" />
+        <arg value="zip-6" />
+        <arg value="--output" />
+        <arg value="@{output}" />
+      </exec>
+    </sequential>
+  </macrodef>
+
   <target name="runtime">
-    <delete dir="build/runtime" />
-    <exec executable="${jdk.home}/bin/jlink" failonerror="true">
-      <arg value="--module-path" />
-      <arg value="${javafx.home}" />
-      <arg value="--add-modules" />
-      <arg value="${modules}" />
-      <arg value="--strip-debug" />
-      <arg value="--no-man-pages" />
-      <arg value="--no-header-files" />
-      <arg value="--compress" />
-      <arg value="zip-6" />
-      <arg value="--output" />
-      <arg value="build/runtime" />
-    </exec>
+    <cutruntime modulepath="${javafx.home}" output="build/runtime" />
   </target>
+
+  <!-- Another platform's launcher files in @{dir}: the jar, media/, run.sh (LF), icon.png, and the runtime cut from
+       that platform's jmods, build/runtime-@{platform}, which build.properties must name. -->
+  <macrodef name="payload">
+    <attribute name="platform" />
+    <attribute name="dir" />
+    <sequential>
+      <fail unless="jdk.jmods.@{platform}" message="build.properties names no jdk.jmods.@{platform}: the Temurin jmods of @{platform}, of jdk.home's version" />
+      <fail unless="javafx.jmods.@{platform}" message="build.properties names no javafx.jmods.@{platform}: the OpenJFX jmods of @{platform}" />
+      <cutruntime modulepath="${jdk.jmods.@{platform}}${path.separator}${javafx.jmods.@{platform}}" output="build/runtime-@{platform}" />
+      <mkdir dir="@{dir}" />
+      <copy file="build/launcher.jar" todir="@{dir}" />
+      <copy todir="@{dir}/media">
+        <fileset dir="media" />
+      </copy>
+      <fixcrlf srcdir="etc" includes="run.sh" destdir="@{dir}" eol="lf" />
+      <copy file="etc/icon-256.png" tofile="@{dir}/icon.png" />
+      <copy todir="@{dir}/runtime">
+        <fileset dir="build/runtime-@{platform}" />
+      </copy>
+    </sequential>
+  </macrodef>
 
   <!-- The folder handed to a player: the jar, media/, run.bat (CRLF, as a .bat is read), and the runtime. -->
   <target name="dist" depends="jar, runtime">
@@ -100,6 +153,31 @@
       <fileset dir="build/runtime" />
     </copy>
     <echo message="Launcher ready: build/dist/${app.name}/run.bat" />
+  </target>
+
+  <!-- Linux: the launcher's files in one folder, brodgar.io-launcher/, which a file manager unpacks as it is. -->
+  <target name="dist-linux-x64" depends="jar">
+    <delete dir="build/dist-linux-x64" />
+    <payload platform="linux-x64" dir="build/dist-linux-x64/brodgar.io-launcher" />
+    <echo message="Launcher ready: build/dist-linux-x64/brodgar.io-launcher/run.sh" />
+  </target>
+
+  <!-- macOS: Brodgar.io.app, whose executable (etc/macos/launcher, LF) copies the launcher's files in
+       Contents/Resources/launcher out to ~/Library/Application Support/Brodgar.io and starts them there. The
+       version goes into Info.plist as well. -->
+  <target name="dist-macos-arm64" depends="jar">
+    <delete dir="build/dist-macos-arm64" />
+    <property name="contents" value="build/dist-macos-arm64/Brodgar.io.app/Contents" />
+    <payload platform="macos-arm64" dir="${contents}/Resources/launcher" />
+    <copy file="etc/macos/Info.plist" todir="${contents}">
+      <filterset>
+        <filter token="VERSION" value="${version}" />
+      </filterset>
+    </copy>
+    <mkdir dir="${contents}/MacOS" />
+    <fixcrlf srcdir="etc/macos" includes="launcher" destdir="${contents}/MacOS" eol="lf" />
+    <copy file="etc/icon.icns" todir="${contents}/Resources" />
+    <echo message="Launcher ready: build/dist-macos-arm64/Brodgar.io.app" />
   </target>
 
   <!-- The Steam Workshop item: launcher.jar with the item's own files around it (workshop/), media/, and
@@ -122,11 +200,21 @@
     <echo message="Workshop item ready: build/workshop/" />
   </target>
 
-  <target name="release" depends="dist">
+  <target name="release" depends="dist, dist-linux-x64, dist-macos-arm64">
     <!-- The files sit at the zip's root, no folder around them: Windows' Extract All makes one folder, named after
          the zip, and a folder inside it would give the player two. -->
-    <zip destfile="build/${asset}" basedir="build/dist/${app.name}" />
-    <echo message="Release asset: build/${asset}" />
+    <zip destfile="build/${asset.windows-x64}" basedir="build/dist/${app.name}" />
+    <copy file="build/${asset.windows-x64}" tofile="build/${asset.windows-legacy}" overwrite="true" />
+    <!-- Linux's zip holds its one folder, macOS's the app. -->
+    <zip destfile="build/${asset.linux-x64}">
+      <zipfileset dir="build/dist-linux-x64" excludes="${executables}" />
+      <zipfileset dir="build/dist-linux-x64" includes="${executables}" filemode="755" />
+    </zip>
+    <zip destfile="build/${asset.macos-arm64}">
+      <zipfileset dir="build/dist-macos-arm64" excludes="${executables}" />
+      <zipfileset dir="build/dist-macos-arm64" includes="${executables}" filemode="755" />
+    </zip>
+    <echo message="Release assets: build/${asset.windows-x64} (and build/${asset.windows-legacy}), build/${asset.linux-x64}, build/${asset.macos-arm64}" />
   </target>
 
   <!-- Development: the launcher on the runtime, its folder being this one (client/ and launcher.properties

@@ -1,9 +1,7 @@
 package io.brodgar.launcher;
 
-import java.awt.Desktop;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -41,7 +39,7 @@ import javafx.util.StringConverter;
  * GPU). Rows: the trailer ({@link Trailer}) and its YouTube link; then a grid: status; progress bar and console
  * checkbox with the main button (Play / Retry / disabled) beside them, spanning both; Options and Open
  * client folder, with the channel dropdown at the right. The console checkbox writes <code>settings</code>
- * directly. All methods are thread-safe
+ * directly; it is a Windows one, and elsewhere its place stays empty. All methods are thread-safe
  * (<code>Platform.runLater</code>); the main button's action runs on a thread of its own. The dropdown is
  * disabled while work runs. Full screen (a double click on the trailer) fills the screen with the trailer
  * alone, on black; Esc brings the window back.
@@ -77,7 +75,7 @@ final class Ui {
         // a quiet blue, no focus ring, flush with the video's left edge; the row around it keeps it there
         link.setStyle("-fx-text-fill: #1e6fd0; -fx-padding: 0; -fx-border-color: transparent;");
         link.setFocusTraversable(false);
-        link.setOnAction(ev -> browse(Trailer.YOUTUBE));
+        link.setOnAction(ev -> Os.browse(Trailer.YOUTUBE));
         watch = new HBox(link);
         status = new Label("Starting...");
         status.setMaxWidth(Double.MAX_VALUE);
@@ -104,6 +102,7 @@ final class Ui {
         console.setSelected(settings.console());
         console.setTooltip(new Tooltip("The client runs in a command window that shows what it prints and stays open when it ends in an error"));
         console.setOnAction(ev -> settings.console(console.isSelected()));
+        console.setVisible(Os.WINDOWS);                 // still laid out: the main button keeps its height
         channel = new ComboBox<>();
         channel.getItems().addAll(Channel.values());
         channel.setConverter(new StringConverter<Channel>() {
@@ -315,15 +314,6 @@ final class Ui {
             // no icon then
         }
         return s;
-    }
-
-    /** Open <code>url</code> in the browser; nothing if there is none. */
-    private static void browse(String url) {
-        try {
-            Desktop.getDesktop().browse(URI.create(url));
-        } catch(IOException | UnsupportedOperationException | IllegalArgumentException e) {
-            // no browser to open it in
-        }
     }
 
     private static void await(CountDownLatch latch) {

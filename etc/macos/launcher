@@ -1,0 +1,23 @@
+#!/bin/sh
+# ----------------------------------------------------------------------
+#  Brodgar.io.app: starts the brodgar.io launcher on macOS.
+#
+#  The launcher is kept in ~/Library/Application Support/Brodgar.io, where
+#  it installs the client and updates itself, and never in the app: an
+#  unsigned app downloaded by a browser may run from a read-only copy macOS
+#  makes of it (App Translocation), and everything in it carries the
+#  download's quarantine mark, which stops an unsigned program from
+#  starting. So at the first start the launcher inside the app,
+#  Contents/Resources/launcher, is copied there without the mark (ditto
+#  --noqtn); from then on the app only starts it: run.sh, which swaps in a
+#  runtime a launcher update left and runs launcher.jar.
+# ----------------------------------------------------------------------
+home="$HOME/Library/Application Support/Brodgar.io"
+seed="$(dirname "$0")/../Resources/launcher"
+if [ ! -f "$home/launcher.jar" ] || [ ! -x "$home/runtime/bin/java" ]; then
+  if ! { mkdir -p "$home" && ditto --noqtn "$seed" "$home"; }; then
+    osascript -e 'display alert "Brodgar.io" message "The launcher could not be copied to ~/Library/Application Support/Brodgar.io." as critical' >/dev/null 2>&1
+    exit 1
+  fi
+fi
+exec "$home/run.sh" "$@"

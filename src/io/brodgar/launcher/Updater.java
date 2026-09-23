@@ -27,24 +27,23 @@ import javax.swing.WindowConstants;
 /**
  * Launcher self-update, a separate process. {@link #launch} copies <code>launcher.jar</code> to
  * <code>update/updater.jar</code> (the running jar is locked) and starts this class from it; the launcher then
- * exits. {@link #main}: wait for the launcher pid, download the release zip into <code>update/</code>, unpack,
- * <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, <code>run.bat</code>,
- * <code>launcher.jar</code> and <code>media/</code> into <code>home</code>, start <code>run.bat</code>, exit.
- * <code>run.bat</code> swaps <code>runtime.new/</code> in and starts the new launcher on it: it runs two
- * seconds after this process is gone, since the runtime cannot be replaced while a process runs on it
- * ({@link #start}). The launcher deletes <code>update/</code> at its next start ({@link #tidy}).
+ * exits. {@link #main}: wait for the launcher pid, download the platform's release zip ({@link Os#asset}) into
+ * <code>update/</code>, unpack, and from the launcher's files in it ({@link Os#PAYLOAD}: inside the app on
+ * macOS) <code>ATOMIC_MOVE</code> <code>runtime/</code> → <code>runtime.new/</code>, the starter
+ * (<code>run.bat</code>, or <code>run.sh</code> off Windows: {@link Os#STARTER}), <code>launcher.jar</code>,
+ * <code>media/</code> and <code>icon.png</code> into <code>home</code>, start the starter, exit. The starter swaps
+ * <code>runtime.new/</code> in and starts the new launcher on it: it runs two seconds after this process is gone,
+ * since the runtime cannot be replaced while a process runs on it ({@link #start}). The launcher deletes
+ * <code>update/</code> at its next start ({@link #tidy}).
  *
  * <p>On failure: error dialog, then the current launcher is started with <code>--no-launcher-update</code>.
  * <code>client/</code> is never touched.
  */
 public final class Updater {
-    private static final String JAR = "launcher.jar", BAT = "run.bat", RUNTIME = "runtime", STAGING = "update";
-    /** What moves into <code>home</code> besides the runtime, each replaced when the zip has it: the two files
-     *  and <code>media/</code>, the trailer's folder. */
-    private static final List<String> FILES = List.of(BAT, JAR, Trailer.DIR);
-    /** The release asset, as build.xml names it: the same for every release, since the folder a player unzips
-     *  keeps its name while the launcher inside updates itself. */
-    static final String ASSET = "brodgar.io-launcher.zip";
+    private static final String JAR = "launcher.jar", RUNTIME = "runtime", STAGING = "update";
+    /** What moves into <code>home</code> besides the runtime, each replaced when the zip has it: the starter,
+     *  the jar, <code>media/</code>, the trailer's folder, and the icon of Linux and macOS. */
+    private static final List<String> FILES = List.of(Os.STARTER, JAR, Trailer.DIR, Os.ICON);
 
     private final Path home;
     private final JFrame frame;
@@ -105,7 +104,8 @@ public final class Updater {
     }
 
     /** Wait for <code>pid</code>; download and unpack into <code>update/</code>; verify <code>launcher.jar</code>
-     *  and <code>runtime/bin/javaw.exe</code> are there; move runtime and {@link #FILES} into place. */
+     *  and the runtime's {@link Os#javaw} are in the launcher's files there ({@link Os#PAYLOAD}); move runtime
+     *  and {@link #FILES} into place. */
     private void install(long pid, String version, String url) throws IOException, InterruptedException {
         waitFor(pid);
         Path dir = home.resolve(STAGING);
@@ -115,17 +115,18 @@ public final class Updater {
         status("Installing the launcher...");
         Unzip.unpack(zip, dir);
         Files.delete(zip);
-        if(!Files.isRegularFile(dir.resolve(JAR)) || !Files.isRegularFile(dir.resolve(RUNTIME).resolve("bin").resolve("javaw.exe")))
+        Path payload = dir.resolve(Os.PAYLOAD);
+        if(!Files.isRegularFile(payload.resolve(JAR)) || !Files.isRegularFile(Os.javaw(payload.resolve(RUNTIME))))
             throw new IOException("the release zip does not hold a launcher");
         Path staged = home.resolve(RUNTIME + ".new");
         deleteTree(staged);
-        Files.move(dir.resolve(RUNTIME), staged, StandardCopyOption.ATOMIC_MOVE);
+        Files.move(payload.resolve(RUNTIME), staged, StandardCopyOption.ATOMIC_MOVE);
         for(String f : FILES) {
-            if(!Files.exists(dir.resolve(f)))
+            if(!Files.exists(payload.resolve(f)))
                 continue;
             if(Files.isDirectory(home.resolve(f)))
                 deleteTree(home.resolve(f));
-            Files.move(dir.resolve(f), home.resolve(f), StandardCopyOption.ATOMIC_MOVE);
+            Files.move(payload.resolve(f), home.resolve(f), StandardCopyOption.ATOMIC_MOVE);
         }
     }
 
@@ -138,13 +139,15 @@ public final class Updater {
         }
     }
 
-    /** <code>run.bat [--no-launcher-update]</code> in <code>home</code>, two seconds from now, in a minimised
-     *  console of its own: by then this process, which runs on <code>runtime/</code>, has exited, and the bat
+    /** The starter, <code>[--no-launcher-update]</code>, in <code>home</code>, two seconds from now: on Windows
+     *  <code>run.bat</code> in a minimised console of its own, elsewhere <code>run.sh</code> under
+     *  <code>sh</code>. By then this process, which runs on <code>runtime/</code>, has exited, and the starter
      *  can swap <code>runtime.new/</code> in before it starts the launcher. The caller exits at once. An
      *  <code>IOException</code> is shown in a dialog. */
     private void start(boolean asIs) {
-        String bat = "timeout /t 2 /nobreak >nul & call " + BAT + (asIs ? " --no-launcher-update" : "");
-        List<String> cmd = List.of("cmd", "/c", "start", "\"\"", "/min", "cmd", "/c", bat);
+        String flag = asIs ? " --no-launcher-update" : "";
+        List<String> cmd = Os.WINDOWS ? List.of("cmd", "/c", "start", "\"\"", "/min", "cmd", "/c", "timeout /t 2 /nobreak >nul & call " + Os.STARTER + flag)
+                                      : List.of("/bin/sh", "-c", "sleep 2; exec ./" + Os.STARTER + flag);
         try {
             new ProcessBuilder(cmd).directory(home.toFile()).inheritIO().start();
         } catch(IOException e) {
@@ -182,7 +185,7 @@ public final class Updater {
         Files.createDirectories(dir);
         Path jar = dir.resolve("updater.jar");
         Files.copy(home.resolve(JAR), jar);
-        Process p = new ProcessBuilder(home.resolve(RUNTIME).resolve("bin").resolve("javaw.exe").toString(), "-cp", jar.toString(), Updater.class.getName(),
+        Process p = new ProcessBuilder(Os.javaw(home.resolve(RUNTIME)).toString(), "-cp", jar.toString(), Updater.class.getName(),
                                        home.toString(), Long.toString(ProcessHandle.current().pid()), version, url)
             .directory(home.toFile()).inheritIO().start();
         if(p.waitFor(1, TimeUnit.SECONDS))

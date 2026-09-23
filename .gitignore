@@ -5,8 +5,9 @@
 /launcher.properties
 /client.log
 /build.properties
-# the JDK the runtime is cut from, the OpenJFX jmods that go into it and the OpenJFX SDK the Workshop item
-# carries, unpacked here and never committed
+# the JDK the runtime is cut from, the OpenJFX jmods that go into it, the other platforms' Temurin and OpenJFX
+# jmods (jdk-*-jmods-<platform>, javafx-jmods-*-<platform>) and the OpenJFX SDK the Workshop item carries,
+# unpacked here and never committed
 /jdk-*
 /javafx-jmods-*
 /javafx-sdk-*
