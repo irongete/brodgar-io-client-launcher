@@ -51,7 +51,8 @@ final class DataMigrator {
 
     /** The worlds whose data is copied, by genus, with the name the dialog shows. */
     private static final Map<String, String> WORLDS = Map.of(
-        "earth10", "World 16");
+        "c646473983afec09", "World 16",
+        "fd63ddee958da329", "World 16.2");
 
     /** The layout the client writes, its <code>SqliteCache.SCHEMA</code>. */
     private static final int SCHEMA = 2;
