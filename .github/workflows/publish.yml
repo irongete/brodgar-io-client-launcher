@@ -2,7 +2,8 @@
 # the number from GitHub, builds, tags, pushes the tag and creates the release with the zips. The Run workflow
 # button takes a number instead. A Windows runner cuts every platform's runtime with the jlink of the JDK the
 # build runs on: Windows' from that JDK, Linux's and macOS's from their own jmods, fetched here for that very
-# version. The Steam Workshop is not here: publish-steam.ps1 needs the Steam client, logged in.
+# version. A macOS runner then adds the macOS disk image to the release (the dmg job). The Steam Workshop is not
+# here: publish-steam.ps1 needs the Steam client, logged in.
 name: Publish
 run-name: brodgar-io-launcher-${{ inputs.version && format('v{0}', inputs.version) || 'next' }}
 
@@ -34,6 +35,8 @@ env:
 jobs:
   publish:
     runs-on: windows-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,3 +101,32 @@ jobs:
           if ($env:VERSION) { $arguments.Version = $env:VERSION }
           ./publish.ps1 @arguments
           "Published $(git tag --points-at HEAD 'v*') from $(git rev-parse --short HEAD)." | Tee-Object -Append -FilePath $env:GITHUB_STEP_SUMMARY
+
+      # the release this commit carries, published here or by hand: the disk image goes into it
+      - name: The release
+        id: release
+        run: |
+          $tag = git tag --points-at HEAD 'v*' | Select-Object -First 1
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+  # The macOS disk image: Brodgar launcher.app beside a link to Applications, to drag it there. Only macOS makes
+  # one (hdiutil), so a macOS runner makes it from the release's own macOS zip, unpacked by ditto, which keeps the
+  # zip's execute bits, and adds it to the release. The zip stays the asset a launcher updates itself from.
+  dmg:
+    needs: publish
+    if: needs.publish.outputs.tag != ''
+    runs-on: macos-latest
+    steps:
+      - name: Disk image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: |
+          set -e
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern brodgar.io-launcher-macos-arm64.zip --dir "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/image"
+          ditto -x -k "$RUNNER_TEMP/brodgar.io-launcher-macos-arm64.zip" "$RUNNER_TEMP/image"
+          ln -s /Applications "$RUNNER_TEMP/image/Applications"
+          hdiutil create -volname "Brodgar launcher" -srcfolder "$RUNNER_TEMP/image" -fs HFS+ -format UDZO -ov "$RUNNER_TEMP/brodgar.io-launcher-macos-arm64.dmg"
+          gh release upload "$TAG" "$RUNNER_TEMP/brodgar.io-launcher-macos-arm64.dmg" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Added brodgar.io-launcher-macos-arm64.dmg to $TAG." >> "$GITHUB_STEP_SUMMARY"

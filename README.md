@@ -17,12 +17,12 @@ Windows, macOS (Apple Silicon: M1 and later) and Linux (x64); it brings its own 
 1. Download it for your system and start it:
    - **Windows**: **[brodgar.io-launcher-windows-x64.zip](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-windows-x64.zip)**.
      Unzip it anywhere (the client and your game data will live in that folder) and run `run.bat`.
-   - **macOS**: **[brodgar.io-launcher-macos-arm64.zip](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-macos-arm64.zip)**.
-     Open it and double-click **Brodgar launcher**; you can move it to Applications or the Dock first. The app is
-     not signed by Apple, so the first time macOS refuses it: open **System Settings**, **Privacy &
-     Security**, and at the bottom press **Open Anyway** by *"Brodgar launcher" was blocked*. Once only; from then
-     on it opens with a double-click. The client and your game data live in
-     `~/Library/Application Support/Brodgar.io`.
+   - **macOS**: **[brodgar.io-launcher-macos-arm64.dmg](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-macos-arm64.dmg)**.
+     Open it and drag **Brodgar launcher** to **Applications**, then open it from there (to keep it in the Dock,
+     drag it there from Applications). The app is not signed by Apple, so the first time macOS refuses it:
+     open **System Settings**, **Privacy & Security**, and at the bottom press **Open Anyway** by
+     *"Brodgar launcher" was blocked*. Once only; from then on it opens with a double-click. The client and
+     your game data live in `~/Library/Application Support/Brodgar.io`.
    - **Linux**: **[brodgar.io-launcher-linux-x64.zip](https://github.com/irongete/brodgar-io-client-launcher/releases/latest/download/brodgar.io-launcher-linux-x64.zip)**.
      Unzip it anywhere (the `brodgar.io-launcher` folder is where the client and your game data will live)
      and run `run.sh` in it: in a terminal, or in the file manager with a right click, **Run as a Program**.
