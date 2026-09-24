@@ -5,12 +5,16 @@
 #  The launcher is kept in ~/Library/Application Support/Brodgar.io, where
 #  it installs the client and updates itself, and never in the app: an
 #  unsigned app downloaded by a browser may run from a read-only copy macOS
-#  makes of it (App Translocation), and everything in it carries the
-#  download's quarantine mark, which stops an unsigned program from
-#  starting. So at the first start the launcher inside the app,
-#  Contents/Resources/launcher, is copied there without the mark (ditto
+#  makes of it (App Translocation). So at the first start the launcher
+#  inside the app, Contents/Resources/launcher, is copied there (ditto
 #  --noqtn); from then on the app only starts it: run.sh, which swaps in a
 #  runtime a launcher update left and runs launcher.jar.
+#
+#  run.sh runs in a process of its own, never exec'd in this one: this is
+#  the process macOS launched the app as, and a Java that replaces the
+#  script here shows no window at all (JavaFX thinks it has shown one). A
+#  process of its own, as a start from Terminal gives it, shows them. What
+#  the launcher prints goes to launcher.log beside it.
 # ----------------------------------------------------------------------
 home="$HOME/Library/Application Support/Brodgar.io"
 seed="$(dirname "$0")/../Resources/launcher"
@@ -20,4 +24,4 @@ if [ ! -f "$home/launcher.jar" ] || [ ! -x "$home/runtime/bin/java" ]; then
     exit 1
   fi
 fi
-exec "$home/run.sh" "$@"
+nohup "$home/run.sh" "$@" >"$home/launcher.log" 2>&1 &
