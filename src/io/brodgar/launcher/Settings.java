@@ -44,7 +44,7 @@ public final class Settings {
 
         # sqlite: -Dhaven.store=sqlite, the map and the resource cache in client/savedata/map.sqlite and
         # rescache.sqlite; files: %APPDATA%\\Haven and Hearth\\data, the game's own store
-        store=files
+        store=sqlite
         # true: the first-start setup asked to import the map and the minimap icons of the game's cache into
         # the SQLite store; the launcher opens the copy once the client is installed, then writes false
         store.import=false
@@ -58,7 +58,7 @@ public final class Settings {
 
         # haven.resurl in client/haven-config.properties, and -U on the client's command line, :=
         # resource.proxy ? RESOURCE_PROXY_URL : resource.url
-        resource.proxy=false
+        resource.proxy=true
         resource.url=https://game.havenandhearth.com/res/
 
         # the brodgar.io resource pack, client/brodgar-res.jar: every resource from the first start; downloaded
@@ -131,13 +131,13 @@ public final class Settings {
     boolean uiScale()         {return "true".equalsIgnoreCase(get("ui.scale", "false"));}
     String ipv6()             {String v = get("ipv6", "system").toLowerCase(); return (v.equals("true") || v.equals("false")) ? v : "system";}
     String javaOptsText()     {return get("java.opts", "");}
-    String store()            {return "sqlite".equalsIgnoreCase(get("store", "files")) ? "sqlite" : "files";}
+    String store()            {return !"files".equalsIgnoreCase(get("store", "sqlite")) ? "sqlite" : "files";}
     String repo()             {return get("repo", "irongete/brodgar-io-client");}
     String assetPrefix()      {return get("asset.prefix", "brodgar.io-client-");}
     String launcherRepo()     {return get("launcher.repo", "irongete/brodgar-io-client-launcher");}
     Channel channel()         {return Channel.of(get("channel", "beta"), Channel.BETA);}
     boolean console()         {return "true".equalsIgnoreCase(get("console", "false"));}
-    boolean resourceProxy()   {return "true".equalsIgnoreCase(get("resource.proxy", "false"));}
+    boolean resourceProxy()   {return !"false".equalsIgnoreCase(get("resource.proxy", "true"));}
     String resourceUrl()      {return get("resource.url", "https://game.havenandhearth.com/res/");}
     boolean resourcePack()    {return !"false".equalsIgnoreCase(get("resource.pack", "true"));}
     String resourcePackUrl()  {return get("resource.pack.url", "https://brodgar.io/res/?jar");}

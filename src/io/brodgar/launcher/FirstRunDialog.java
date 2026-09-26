@@ -19,7 +19,7 @@ import javafx.stage.Stage;
  * The first-start setup, before the main window: a page for each choice the launcher makes on the player's
  * behalf — the resource pack, the resource cache, the portable client, the game's memory — with what it buys in two
  * or three plain sentences ending in the recommendation ({@link #recommendedGb} for the memory) above its control,
- * which starts at the setting's current value; Back and Next, Finish
+ * which starts selected by default (the memory at the setting's current value); Back and Next, Finish
  * on the last page. Finish writes the four settings and <code>firstrun=false</code> to
  * <code>launcher.properties</code>: the launcher then opens. Closing the window quits the launcher with nothing
  * written, so the setup returns at the next start. {@link Settings#firstRun} says whether it is shown
@@ -63,11 +63,11 @@ final class FirstRunDialog {
         this.settings = settings;
         long totalGb = OptionsDialog.totalMemoryGb();
         pack = new CheckBox("Download the brodgar.io resource pack");
-        pack.setSelected(settings.resourcePack());
+        pack.setSelected(true);
         proxy = new CheckBox("Use brodgar.io resource cache");
-        proxy.setSelected(settings.resourceProxy());
+        proxy.setSelected(true);
         sqlite = new CheckBox("Portable client");
-        sqlite.setSelected(settings.store().equals("sqlite"));
+        sqlite.setSelected(true);
         importMap = new CheckBox("Import the map and the minimap icons from the cache");
         importMap.setSelected(DataMigrator.hasCache());
         importMap.disableProperty().bind(sqlite.selectedProperty().not());
