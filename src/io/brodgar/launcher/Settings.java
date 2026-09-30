@@ -25,7 +25,7 @@ public final class Settings {
         # Brodgar launcher settings. A missing key takes its default. See README.md, "Settings".
 
         # -Xms<heap> -Xmx<heap>
-        heap=2g
+        heap=4g
 
         # -XX:+AlwaysPreTouch
         heap.pretouch=true
@@ -125,7 +125,7 @@ public final class Settings {
         return ((v == null) || v.isBlank()) ? def : v.trim();
     }
 
-    String heap()             {return get("heap", "2g");}
+    String heap()             {return get("heap", "4g");}
     boolean pretouch()        {return !"false".equalsIgnoreCase(get("heap.pretouch", "true"));}
     String gc()               {return "g1".equalsIgnoreCase(get("gc", "zgc")) ? "g1" : "zgc";}
     boolean uiScale()         {return "true".equalsIgnoreCase(get("ui.scale", "false"));}
