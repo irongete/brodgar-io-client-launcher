@@ -7,7 +7,7 @@ Windows, macOS (Apple Silicon: M1 and later) and Linux (x64); it brings its own 
 - **Updates itself** the same way.
 - **Fetches the game's resources from brodgar.io** (two checkboxes in **Options...**): the **resource
   pack**, `client/brodgar-res.jar`, holds every resource from the first start (one download of about
-  250 MB; renewed at most monthly, and only when there is something new), and the **resource cache**
+  250 MB; checked on every start and renewed only when there is something new), and the **resource cache**
   answers what the pack has not got in a fraction of the official server's time.
   `launcher.properties`: `resource.pack`, `resource.pack.url`, `resource.pack.renew.days`, `resource.proxy`.
 - **Starts the game** with the memory and Java options you set in **Options...**.

@@ -162,8 +162,8 @@ public final class Launcher {
     }
 
     /** The resource pack ({@link ResourcePack}), when <code>resource.pack</code> is on: a
-     *  download the first time (~250 MB, the status line says so), a conditional check after the renewal
-     *  period, nothing in between. Never in the way of Play: the client runs without it, and a failed
+     *  download the first time (~250 MB, the status line says so), a conditional check on every start (or
+     *  after <code>resource.pack.renew.days</code>, when set). Never in the way of Play: the client runs without it, and a failed
      *  download leaves the installed one. */
     private void pack() {
         if(!settings.resourcePack())
