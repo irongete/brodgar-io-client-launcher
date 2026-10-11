@@ -162,8 +162,8 @@ public final class Launcher {
     }
 
     /** The resource pack ({@link ResourcePack}), when <code>resource.pack</code> is on: a
-     *  download the first time (~250 MB, the status line says so), a conditional check on every start (or
-     *  after <code>resource.pack.renew.days</code>, when set). Never in the way of Play: the client runs without it, and a failed
+     *  download the first time (~250 MB, the status line says so), a conditional check on every
+     *  start. Never in the way of Play: the client runs without it, and a failed
      *  download leaves the installed one. */
     private void pack() {
         if(!settings.resourcePack())
@@ -171,10 +171,9 @@ public final class Launcher {
         boolean first = !Files.exists(client.dir().resolve(ResourcePack.JAR));
         try {
             Runnable asking = () -> ui.status(first ? "Downloading the resource pack (once, about 250 MB)..." : "Checking the resource pack...");
-            switch(ResourcePack.sync(settings.resourcePackUrl(), client.dir(), settings.resourcePackRenewDays(), asking, ui::progress)) {
+            switch(ResourcePack.sync(settings.resourcePackUrl(), client.dir(), asking, ui::progress)) {
                 case DOWNLOADED -> ui.status("The resource pack is ready.");
                 case UNCHANGED -> ui.status("The resource pack is up to date.");
-                case YOUNG -> {}   // younger than the renewal period: not even asked about; the status line stays
             }
         } catch(Exception e) {
             ui.status(first ? "The resource pack could not be downloaded (" + e.getMessage() + "): the client fetches resources as it goes."
@@ -438,7 +437,7 @@ public final class Launcher {
             System.out.println("newest:    unreachable: " + e);
         }
         System.out.println("proxy:     " + (settings.resourceProxy() ? "on, " + Settings.RESOURCE_PROXY_URL : "off, " + settings.resourceUrl() + " (the game's own resource server)"));
-        System.out.println("pack:      " + (!settings.resourcePack() ? "off" : settings.resourcePackUrl() + ", renewed after " + settings.resourcePackRenewDays() + " days; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
+        System.out.println("pack:      " + (!settings.resourcePack() ? "off" : settings.resourcePackUrl() + ", checked every start; installed: " + (Files.exists(client.dir().resolve(ResourcePack.JAR)) ? "yes" : "no")));
         System.out.println("config:    " + client.config() + " is made to say: " + Settings.lines(settings.clientConfig()).replace(System.lineSeparator(), "  "));
         System.out.println("setup:     " + (settings.firstRun() ? "pending (firstrun=true): the first-start setup opens before the window" : "done"));
         System.out.println("console:   " + (!Os.WINDOWS ? "none on " + Os.label() + " (what the client prints goes to client.log)"
